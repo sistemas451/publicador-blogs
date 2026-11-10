@@ -34,7 +34,10 @@ function limpiar(html, urls) {
       h1: 'h2',
       b: 'strong',
       i: 'em',
-      a: (tag, a) => ({ tagName: 'a', attribs: { ...(a.href ? { href: a.href } : {}), target: '_blank', rel: 'noopener noreferrer' } }),
+      // Un enlace sin dirección válida (por ejemplo javascript:) deja solo el texto.
+      a: (tag, a) => (/^\s*(https?:|mailto:|tel:)/i.test(a.href || '')
+        ? { tagName: 'a', attribs: { href: a.href, target: '_blank', rel: 'noopener noreferrer' } }
+        : { tagName: 'span', attribs: {} }),
       img: (tag, a) => {
         const n = /^\d{1,2}$/.test(a['data-imagen'] || '') ? a['data-imagen'] : null;
         if (n === null) return { tagName: 'img', attribs: {} };

@@ -33,9 +33,60 @@
 
   <section id="panel" hidden>
     <p>Sesión iniciada como <b id="yo"></b>. <button id="salir" type="button">Salir</button></p>
-    <p>El formulario para cargar blogs viene en la próxima etapa.</p>
+    <nav>
+      <button type="button" data-vista="nuevo">Nuevo blog</button>
+      <button type="button" data-vista="lista">Mis borradores</button>
+      <button type="button" data-vista="usuarios" id="nav-usuarios" hidden>Usuarios</button>
+    </nav>
+    <hr>
 
-    <div id="admin" hidden>
+    <section id="v-nuevo" hidden>
+      <h2>Nuevo blog</h2>
+      <p>Esto crea un <b>borrador</b> en la web. No se publica: lo revisa y lo publica Facundo.</p>
+      <form id="f-blog">
+        <p><label>Título<br><input type="text" name="title" required maxlength="200" size="70"></label></p>
+        <p><label>Categoría<br><select name="categoryId" required></select></label></p>
+        <p><label>Autor (aparece como "Por ..." al principio)<br><input type="text" name="author" maxlength="100" size="40"></label></p>
+
+        <p>Texto del blog (podés pegar con formato desde Word o Google Docs):</p>
+        <p id="barra">
+          <button type="button" data-cmd="bold"><b>Negrita</b></button>
+          <button type="button" data-cmd="italic"><i>Cursiva</i></button>
+          <button type="button" data-cmd="formatBlock" data-valor="h2">Título</button>
+          <button type="button" data-cmd="formatBlock" data-valor="h3">Subtítulo</button>
+          <button type="button" data-cmd="formatBlock" data-valor="p">Párrafo</button>
+          <button type="button" data-cmd="insertUnorderedList">Lista</button>
+          <button type="button" data-cmd="insertOrderedList">Lista numerada</button>
+          <button type="button" id="b-enlace">Enlace</button>
+        </p>
+        <div id="editor" contenteditable="true" style="border:1px solid #888; min-height:300px; padding:8px; max-width:800px"></div>
+
+        <h3>Imágenes</h3>
+        <p id="limites"></p>
+        <p><input type="file" id="archivos" accept="image/jpeg,image/png,image/webp" multiple></p>
+        <ol id="imagenes"></ol>
+        <p><label><input type="radio" name="destacada" value="" checked> Sin imagen destacada</label></p>
+
+        <p>
+          <button type="button" id="b-previa">Vista previa</button>
+          <button type="submit" id="b-crear">Crear borrador</button>
+        </p>
+      </form>
+      <div id="resultado"></div>
+      <div id="vista" hidden>
+        <hr>
+        <p><i>Vista previa aproximada: muestra el contenido tal como se va a enviar. El diseño final lo pone la web.</i></p>
+        <div id="vista-contenido" style="max-width:800px"></div>
+        <hr>
+      </div>
+    </section>
+
+    <section id="v-lista" hidden>
+      <h2>Borradores</h2>
+      <ul id="borradores"></ul>
+    </section>
+
+    <section id="v-usuarios" hidden>
       <h2>Usuarios</h2>
       <form id="f-invitar">
         <p><label>Correo<br><input type="email" name="email" required></label></p>
@@ -43,7 +94,7 @@
         <p><button type="submit">Invitar</button></p>
       </form>
       <ul id="usuarios"></ul>
-    </div>
+    </section>
   </section>
 
   <script src="/app.js"></script>

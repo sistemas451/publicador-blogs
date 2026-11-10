@@ -19,7 +19,7 @@ Los nombres est谩n en `.env.example`. Los valores van en un `.env` local (ignora
 
 ## Estado
 
-Hechas: Fase 1 (base), Fase 2 (usuarios, invitaci贸n, login, recuperaci贸n de contrase帽a, registro de ingresos) y Fase 3 (publicaci贸n en WordPress, probada contra un WordPress simulado). Falta: pantallas definitivas y despliegue.
+Hechas: Fase 1 (base), Fase 2 (usuarios, invitaci贸n, login, recuperaci贸n de contrase帽a, registro de ingresos) y Fase 3 (publicaci贸n en WordPress, probada contra un WordPress simulado). Fase 4 (pantallas en HTML plano: formulario con editor, im醙enes, vista previa, lista de borradores; gu韆 de la plantilla en `docs/Plantilla-Blog-Publicador.md`). Falta: despliegue. Para probar las pantallas sin tocar WordPress: `node scripts/wp-falso.js` y arrancar el servidor con `WP_URL=http://127.0.0.1:4000 WP_USER=publicador WP_APP_PASSWORD="abcd efgh"`.
 
 API de la Fase 3 (todas con sesi贸n): `GET /api/categories`, `GET /api/drafts`, `POST /api/drafts` (multipart: `title`, `categoryId`, `author` opcional, `html`, `featured` opcional, y las im谩genes en `imagenes`; en el `html` cada imagen es `<img data-imagen="N">`). Siempre crea el borrador con estado `draft`. La etiqueta `publicador` conviene crearla a mano en WordPress.
 

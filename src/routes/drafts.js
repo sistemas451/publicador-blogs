@@ -5,7 +5,7 @@ const { config } = require('../config');
 const A = require('../services/auth');
 const wp = require('../services/wordpress');
 const { publicar } = require('../services/publicar');
-const { Invalido } = require('../services/contenido');
+const { Invalido, limpiar } = require('../services/contenido');
 
 const router = express.Router(); // se monta en /api
 
@@ -43,12 +43,19 @@ const recibir = (req, res, next) => {
 
 router.get('/categories', A.sesion, async (req, res) => {
   try {
-    res.json({ categories: await wp.categorias() });
+    res.json({ categories: await wp.categorias(), limits: { maxImages: config.maxImages, maxImageMb: config.maxImageMb } });
   } catch (e) {
     if (!(e instanceof wp.ErrorWp)) throw e;
     console.error('Categorías:', e.detalle || e.message);
     res.status(502).json({ error: e.message });
   }
+});
+
+// Vista previa: devuelve el HTML ya limpiado con la MISMA regla que usa la publicación, así lo que se ve es lo que se envía.
+router.post('/preview', A.sesion, (req, res) => {
+  const { html } = req.body || {};
+  if (typeof html !== 'string' || html.length > 2 * 1024 * 1024) return res.status(400).json({ error: 'No hay texto para mostrar.' });
+  res.json({ html: limpiar(html) });
 });
 
 router.get('/drafts', A.sesion, async (req, res) => {

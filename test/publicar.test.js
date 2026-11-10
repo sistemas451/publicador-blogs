@@ -111,6 +111,7 @@ test('limpiar: saca scripts, estilos, eventos y enlaces peligrosos; conserva el 
   const sucio = '<h1>Título</h1><p style="color:red" onclick="x()">Hola <b>mundo</b> <a href="javascript:alert(1)">mal</a> <a href="https://ok.com/x">bien</a></p><script>alert(1)</script><iframe src="https://x"></iframe><style>p{}</style><img src="https://ajena.com/a.png"><img src=x onerror=alert(1)><img data-imagen="2" alt="foto">';
   const l = limpiar(sucio);
   assert.ok(!/script|iframe|style|onclick|onerror|javascript:|ajena/.test(l), l);
+  assert.ok(!/<a [^>]*>mal<\/a>/.test(l) && l.includes('mal'), 'el enlace javascript: deja solo el texto');
   assert.match(l, /<h2>Título<\/h2>/);
   assert.match(l, /<strong>mundo<\/strong>/);
   assert.match(l, /href="https:\/\/ok\.com\/x" target="_blank" rel="noopener noreferrer"/);
@@ -141,11 +142,22 @@ test('sin sesión: 401', async () => {
   assert.strictEqual((await c.post('/api/drafts', formulario())).status, 401);
 });
 
+test('vista previa: devuelve el mismo HTML limpio que se publicaría; pide sesión', async () => {
+  assert.strictEqual((await cliente().post('/api/preview', { html: '<p>x</p>' })).status, 401);
+  const c = await entrar('previa');
+  const r = await c.post('/api/preview', { html: '<h1>T</h1><script>x()</script><p onclick="y()">a</p><img data-imagen="0" src="https://ajena.com/x.png">' });
+  assert.strictEqual(r.status, 200);
+  assert.strictEqual(r.json.html, limpiar('<h1>T</h1><script>x()</script><p onclick="y()">a</p><img data-imagen="0" src="https://ajena.com/x.png">'));
+  assert.ok(!/script|onclick|ajena/.test(r.json.html));
+  assert.strictEqual((await c.post('/api/preview', { html: 5 })).status, 400);
+});
+
 test('categorías: sin "Sin categoría" y con los nombres decodificados', async () => {
   const c = await entrar('cat');
   const r = await c.get('/api/categories');
   assert.strictEqual(r.status, 200);
   assert.deepStrictEqual(r.json.categories, [{ id: 7, name: 'Noticias & Novedades' }]);
+  assert.deepStrictEqual(r.json.limits, { maxImages: config.maxImages, maxImageMb: config.maxImageMb });
 });
 
 test('camino feliz: sube imágenes, arma el texto y crea UN borrador (draft) con categoría, destacada y etiqueta', async () => {
