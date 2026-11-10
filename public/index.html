@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Publicador de blogs</title>
+</head>
+<body>
+  <h1>Publicador de blogs</h1>
+  <p id="mensaje"></p>
+
+  <form id="f-login" hidden>
+    <h2>Ingresar</h2>
+    <p><label>Correo<br><input type="email" name="email" required autocomplete="username"></label></p>
+    <p><label>Contraseña<br><input type="password" name="password" required autocomplete="current-password"></label></p>
+    <p><button type="submit">Ingresar</button></p>
+    <p><a href="#" id="ir-olvide">Olvidé mi contraseña</a></p>
+  </form>
+
+  <form id="f-olvide" hidden>
+    <h2>Recuperar contraseña</h2>
+    <p><label>Correo<br><input type="email" name="email" required></label></p>
+    <p><button type="submit">Enviar enlace</button> <a href="#" id="ir-login">Volver</a></p>
+  </form>
+
+  <form id="f-clave" hidden>
+    <h2 id="titulo-clave"></h2>
+    <p id="quien"></p>
+    <p id="fila-nombre"><label>Nombre<br><input type="text" name="name" maxlength="100"></label></p>
+    <p><label>Contraseña nueva (10 a 72 caracteres)<br><input type="password" name="password" required minlength="10" maxlength="72" autocomplete="new-password"></label></p>
+    <p><button type="submit">Guardar contraseña</button></p>
+  </form>
+
+  <section id="panel" hidden>
+    <p>Sesión iniciada como <b id="yo"></b>. <button id="salir" type="button">Salir</button></p>
+    <p>El formulario para cargar blogs viene en la próxima etapa.</p>
+
+    <div id="admin" hidden>
+      <h2>Usuarios</h2>
+      <form id="f-invitar">
+        <p><label>Correo<br><input type="email" name="email" required></label></p>
+        <p><label>Nombre<br><input type="text" name="name" required maxlength="100"></label></p>
+        <p><button type="submit">Invitar</button></p>
+      </form>
+      <ul id="usuarios"></ul>
+    </div>
+  </section>
+
+  <script src="/app.js"></script>
+</body>
+</html>

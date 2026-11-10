@@ -1,6 +1,5 @@
 const express = require('express');
 const cookieParser = require('cookie-parser');
-const fs = require('fs');
 const path = require('path');
 const { config } = require('./config');
 const { cabeceras, corsLimitado, origenPropio, limiteAuth } = require('./middleware/seguridad');
@@ -23,12 +22,10 @@ function createApp({ limiteIntentos = 15 } = {}) {
 
   app.use('/api', (req, res) => res.status(404).json({ error: 'No existe.' }));
 
-  // Pantalla (Vite). Solo si ya está compilada.
-  const dist = path.join(__dirname, '..', 'client', 'dist');
-  if (fs.existsSync(dist)) {
-    app.use(express.static(dist));
-    app.get('/{*splat}', (req, res) => res.sendFile(path.join(dist, 'index.html')));
-  }
+  // Pantalla mínima en HTML plano (public/). En la Fase 4 la reemplaza la de Vite (client/dist).
+  const carpeta = path.join(__dirname, '..', 'public');
+  app.use(express.static(carpeta));
+  app.get('/{*splat}', (req, res) => res.sendFile(path.join(carpeta, 'index.html')));
 
   // Manejo de errores: nunca devuelve el detalle interno.
   // eslint-disable-next-line no-unused-vars
