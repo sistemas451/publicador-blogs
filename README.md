@@ -19,6 +19,8 @@ Los nombres están en `.env.example`. Los valores van en un `.env` local (ignora
 
 ## Estado
 
-Hechas: Fase 1 (base) y Fase 2 (usuarios, invitación, login, recuperación de contraseña, registro de ingresos). Falta: publicación en WordPress, pantallas y despliegue.
+Hechas: Fase 1 (base), Fase 2 (usuarios, invitación, login, recuperación de contraseña, registro de ingresos) y Fase 3 (publicación en WordPress, probada contra un WordPress simulado). Falta: pantallas definitivas y despliegue.
+
+API de la Fase 3 (todas con sesión): `GET /api/categories`, `GET /api/drafts`, `POST /api/drafts` (multipart: `title`, `categoryId`, `author` opcional, `html`, `featured` opcional, y las imágenes en `imagenes`; en el `html` cada imagen es `<img data-imagen="N">`). Siempre crea el borrador con estado `draft`. La etiqueta `publicador` conviene crearla a mano en WordPress.
 
 
