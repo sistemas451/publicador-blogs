@@ -1,0 +1,11 @@
+# Claves y entorno: NUNCA al repositorio
+.env
+.env.*
+!.env.example
+
+node_modules/
+client/dist/
+dist/
+*.log
+.DS_Store
+.claude/

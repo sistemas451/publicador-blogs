@@ -1,0 +1,79 @@
+// Base propia del publicador. No comparte nada con la base del CRM.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String     @id @default(cuid())
+  email             String     @unique
+  name              String
+  passwordHash      String
+  isAdmin           Boolean    @default(false)
+  active            Boolean    @default(true)
+  passwordChangedAt DateTime?
+  createdAt         DateTime   @default(now())
+  tokens            Token[]
+  drafts            Draft[]
+  logins            LoginLog[]
+}
+
+enum TokenType {
+  INVITE
+  RESET
+}
+
+// El token en claro nunca se guarda: solo su hash.
+model Token {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      TokenType
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+}
+
+model LoginLog {
+  id        String   @id @default(cuid())
+  email     String
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  success   Boolean
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+enum DraftStatus {
+  CREADO
+  FALLIDO
+}
+
+// Registro de quién creó qué borrador y cuándo.
+model Draft {
+  id          String      @id @default(cuid())
+  userId      String
+  user        User        @relation(fields: [userId], references: [id])
+  title       String
+  wpPostId    Int?
+  wpEditUrl   String?
+  wpLink      String?
+  categoryId  Int?
+  authorLine  String?
+  imageCount  Int         @default(0)
+  status      DraftStatus
+  error       String?
+  createdAt   DateTime    @default(now())
+
+  @@index([createdAt])
+}
