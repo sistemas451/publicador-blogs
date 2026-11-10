@@ -29,19 +29,27 @@ function cabeceras() {
 }
 
 // CORS: solo el origen de la propia aplicación.
-function corsLimitado() {
-  return cors({ origin: config.appUrl, credentials: true });
+const corsLimitado = () => cors({ origin: config.origenesPermitidos, credentials: true });
+
+// Defensa extra contra pedidos disparados desde otro sitio: si un pedido que modifica datos
+// trae un Origin y no es el de la aplicación, se rechaza (la cookie ya es SameSite=Strict).
+function origenPropio(req, res, next) {
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+    const origen = req.get('origin');
+    if (origen && !config.origenesPermitidos.includes(origen)) return res.status(403).json({ error: 'Origen no permitido.' });
+  }
+  next();
 }
 
-// Autenticación: 15 intentos por IP cada 15 minutos.
-function limiteAuth() {
+// Autenticación: por defecto 15 intentos por IP cada 15 minutos.
+function limiteAuth(limite = 15) {
   return rateLimit({
     windowMs: 15 * 60 * 1000,
-    limit: 15,
+    limit: limite,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
     message: { error: 'Demasiados intentos. Probá de nuevo en unos minutos.' },
   });
 }
 
-module.exports = { cabeceras, corsLimitado, limiteAuth };
+module.exports = { cabeceras, corsLimitado, origenPropio, limiteAuth };

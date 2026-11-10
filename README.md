@@ -19,4 +19,6 @@ Los nombres están en `.env.example`. Los valores van en un `.env` local (ignora
 
 ## Estado
 
-Fase 1 (base del proyecto) hecha. Usuarios, publicación, pantalla completa y despliegue vienen en las fases siguientes.
+Hechas: Fase 1 (base) y Fase 2 (usuarios, invitación, login, recuperación de contraseña, registro de ingresos). Falta: publicación en WordPress, pantallas y despliegue.
+
+

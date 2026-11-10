@@ -2,6 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { createApp } = require('../src/app');
+const { config } = require('../src/config');
 
 async function levantar() {
   const server = createApp().listen(0);
@@ -33,10 +34,10 @@ test('cabeceras de seguridad: CSP, sin x-powered-by', async () => {
 test('CORS: solo el origen de la aplicación', async () => {
   const { server, base } = await levantar();
   const ajeno = await fetch(base + '/api/health', { headers: { Origin: 'https://sitio-ajeno.example' } });
-  const propio = await fetch(base + '/api/health', { headers: { Origin: base } });
+  const propio = await fetch(base + '/api/health', { headers: { Origin: config.appUrl } });
   server.close();
   assert.notStrictEqual(ajeno.headers.get('access-control-allow-origin'), 'https://sitio-ajeno.example');
-  assert.ok(propio.headers.get('access-control-allow-origin'));
+  assert.strictEqual(propio.headers.get('access-control-allow-origin'), config.appUrl);
 });
 
 test('ruta inexistente de la API: 404 en JSON, sin detalle interno', async () => {

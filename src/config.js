@@ -1,6 +1,7 @@
 // Lee las variables de entorno una sola vez. .env solo se usa si existe (en Railway no hay archivo).
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const envFile = path.join(__dirname, '..', '.env');
 if (fs.existsSync(envFile)) {
@@ -30,6 +31,15 @@ const config = {
   maxImageMb: num(process.env.MAX_IMAGE_MB, 5),
   maxImages: num(process.env.MAX_IMAGES, 10),
 };
+
+// En desarrollo, si falta JWT_SECRET se usa uno al azar (las sesiones se pierden al reiniciar).
+if (!isProd && config.jwtSecret.length < 32) {
+  config.jwtSecret = crypto.randomBytes(32).toString('hex');
+  if (process.env.NODE_TEST_CONTEXT === undefined) console.warn('Aviso: JWT_SECRET no definido; se usa un secreto temporal de desarrollo.');
+}
+
+// Orígenes desde los que se aceptan pedidos (en desarrollo, también el servidor de Vite).
+config.origenesPermitidos = [config.appUrl, ...(isProd ? [] : ['http://localhost:5173'])];
 
 // En producción el servidor no arranca sin lo imprescindible (nunca con un secreto vacío o corto).
 function validarProduccion() {
