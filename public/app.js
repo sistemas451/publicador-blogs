@@ -24,6 +24,13 @@ async function api(metodo, ruta, cuerpo) {
   if (!r.ok) throw new Error(json.error || 'Algo salió mal.');
   return json;
 }
+async function apiForm(metodo, ruta, fd) {
+  const r = await fetch('/api' + ruta, { method: metodo, body: fd });
+  let json = {};
+  try { json = await r.json(); } catch { /* sin cuerpo */ }
+  if (!r.ok) throw new Error(json.error || 'Algo salió mal.');
+  return json;
+}
 const datos = (form) => Object.fromEntries(new FormData(form).entries());
 const enviar = (form, fn) => form.addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -328,19 +335,33 @@ async function cargarAutores() {
   ul.replaceChildren();
   for (const a of authors) {
     const li = document.createElement('li');
-    li.textContent = `${a.name}${a.role ? ' · ' + a.role : ''}${a.linkUrl ? ' (' + a.linkUrl + ')' : ''}${a.active ? '' : ' [desactivado]'} `;
+    if (a.photoUrl) {
+      const f = document.createElement('img');
+      f.src = a.photoUrl; f.alt = ''; f.width = 40; f.height = 40; f.style.cssText = 'border-radius:50%;object-fit:cover;vertical-align:middle;margin-right:8px';
+      li.appendChild(f);
+    }
+    li.append(`${a.name}${a.role ? ' · ' + a.role : ''}${a.linkUrl ? ' (' + a.linkUrl + ')' : ''}${a.active ? '' : ' [desactivado]'} `);
+    const cambiar = document.createElement('input');
+    cambiar.type = 'file'; cambiar.accept = 'image/jpeg,image/png,image/webp'; cambiar.title = a.photoUrl ? 'Cambiar foto' : 'Agregar foto';
+    cambiar.onchange = async () => {
+      if (!cambiar.files[0]) return;
+      const fd = new FormData(); fd.append('foto', cambiar.files[0]);
+      try { aviso('Subiendo la foto...'); await apiForm('PATCH', '/authors/' + a.id, fd); aviso('Foto actualizada.'); await cargarAutores(); } catch (err) { aviso(err.message, true); }
+    };
     const b = document.createElement('button');
     b.type = 'button';
     b.textContent = a.active ? 'Desactivar' : 'Activar';
     b.onclick = async () => {
       try { await api('PATCH', '/authors/' + a.id, { active: !a.active }); await cargarAutores(); } catch (err) { aviso(err.message, true); }
     };
-    li.appendChild(b);
+    li.append(b, ' ', cambiar);
     ul.appendChild(li);
   }
 }
-enviar($('f-autor'), async (d) => {
-  await api('POST', '/authors', d);
+enviar($('f-autor'), async () => {
+  const fd = new FormData($('f-autor'));
+  if (!fd.get('foto') || !fd.get('foto').size) fd.delete('foto');
+  await apiForm('POST', '/authors', fd);
   $('f-autor').reset();
   aviso('Autor agregado.');
   await cargarAutores();

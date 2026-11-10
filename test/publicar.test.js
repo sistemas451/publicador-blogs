@@ -313,3 +313,23 @@ test('autores: todos los usuarios ven los activos; solo el admin agrega, edita y
   assert.ok((await adm.get('/api/authors?todos=1')).json.authors.some((a) => a.id === id));
   assert.strictEqual((await adm.patch('/api/authors/no-existe', { active: true })).status, 404);
 });
+
+test('autores con foto: se sube a WordPress, el bloque sale con la foto y al cambiarla se borra la anterior', async () => {
+  const adm = await entrar('adm-foto', true);
+  
+  const mala = new FormData(); mala.append('name', `Mala ${SUF}`); mala.append('foto', new Blob([Buffer.from('GIF89a-no-sirve-xxxxxxxx')]), 'f.gif');
+  assert.strictEqual((await adm.post('/api/authors', mala)).status, 400);
+  assert.strictEqual(wpSim.media.size, 0);
+  const f1 = new FormData(); f1.append('name', `Fotos ${SUF}`); f1.append('role', 'Ing.'); f1.append('linkUrl', 'https://linkedin.com/in/y'); f1.append('foto', new Blob([PNG]), 'a.png');
+  const r = await adm.post('/api/authors', f1);
+  assert.strictEqual(r.status, 201);
+  assert.ok(r.json.author.photoUrl.startsWith('http'));
+  assert.strictEqual(wpSim.media.size, 1);
+  await adm.post('/api/drafts', formulario({ authorId: r.json.author.id }));
+  const c = wpSim.posts[0].content;
+  assert.ok(c.startsWith('<div style="display:flex'), c);
+  assert.ok(c.includes(`src="${r.json.author.photoUrl}"`) && c.includes('[Linkedin]') && c.includes('>Ing.'), c);
+  const f2 = new FormData(); f2.append('foto', new Blob([JPG]), 'b.jpg');
+  assert.strictEqual((await adm.patch(`/api/authors/${r.json.author.id}`, f2)).status, 200);
+  assert.strictEqual(wpSim.media.size, 1); // la anterior se borró
+});

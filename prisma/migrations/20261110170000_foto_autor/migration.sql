@@ -1,0 +1,2 @@
+ALTER TABLE "Author" ADD COLUMN "photoUrl" TEXT,
+ADD COLUMN "photoMediaId" INTEGER;

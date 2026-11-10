@@ -64,7 +64,13 @@ function lineaDeAutor(a) {
   const nombre = /^\s*https?:\/\//i.test(a.linkUrl || '')
     ? `<a href="${escapar(a.linkUrl.trim())}" target="_blank" rel="noopener noreferrer">${escapar(a.name)}</a>`
     : escapar(a.name);
-  return `<p><em>Por ${nombre}${a.role ? ' · ' + escapar(a.role) : ''}</em></p>`;
+  if (!/^https?:\/\//i.test(a.photoUrl || '')) return `<p><em>Por ${nombre}${a.role ? ' · ' + escapar(a.role) : ''}</em></p>`;
+  // Con foto: bloque con la foto redonda, el nombre grande y el cargo debajo. Los estilos van en línea (la web no
+  // tiene una clase para esto); la foto lleva además la clase alignleft por si WordPress recorta algún estilo.
+  const enlace = /^\s*https?:\/\//i.test(a.linkUrl || '')
+    ? ` – <a href="${escapar(a.linkUrl.trim())}" target="_blank" rel="noopener noreferrer">[Linkedin]</a>` : '';
+  const cargo = a.role || enlace ? `<br><span style="color:#777;font-size:0.95em">${escapar(a.role || '')}${a.role ? enlace : enlace.replace(/^ – /, '')}</span>` : '';
+  return `<div style="display:flex;align-items:center;gap:16px;margin:0 0 24px"><img class="alignleft" src="${escapar(a.photoUrl)}" alt="${escapar(a.name)}" width="80" height="80" style="width:80px;height:80px;border-radius:50%;object-fit:cover;margin:0"><p style="margin:0"><strong style="font-size:1.5em;color:#000">${escapar(a.name)}</strong>${cargo}</p></div>`;
 }
 
 module.exports = { Invalido, tipoDeImagen, limpiar, indicesUsados, escapar, hayTexto, lineaDeAutor };

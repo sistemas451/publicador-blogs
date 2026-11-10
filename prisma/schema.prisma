@@ -61,6 +61,8 @@ model Author {
   name      String
   role      String?
   linkUrl   String?
+  photoUrl  String?
+  photoMediaId Int?
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
 }
