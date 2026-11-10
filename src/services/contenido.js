@@ -19,7 +19,7 @@ const ETIQUETAS = ['p', 'br', 'h2', 'h3', 'h4', 'strong', 'em', 'u', 's', 'ul', 
 // Sin `urls`: deja las imágenes como marcador (data-imagen="N"); las que no tienen un marcador válido se sacan.
 // Con `urls`: reemplaza cada marcador por la dirección de la imagen ya subida a WordPress.
 function limpiar(html, urls) {
-  return sanitizeHtml(String(html || ''), {
+  return aParrafos(sanitizeHtml(String(html || ''), {
     allowedTags: ETIQUETAS,
     allowedAttributes: {
       a: ['href', 'target', 'rel'],
@@ -50,7 +50,14 @@ function limpiar(html, urls) {
       (f.tag === 'img' && !(urls ? f.attribs.src : f.attribs['data-imagen'])) ||
       // párrafos vacíos (las líneas en blanco del texto pegado), salvo que tengan una imagen
       ((f.tag === 'p' || f.tag === 'div') && f.text.replace(/&nbsp;|\s/g, '') === '' && !f.mediaChildren.length),
-  });
+  }));
+}
+
+// Texto pegado con un salto de línea por renglón llega como UN párrafo con <br>: cada renglón pasa a ser un párrafo.
+function aParrafos(html) {
+  return html.replace(/<p>([\s\S]*?)<\/p>/g, (m, dentro) => (/<br\s*\/?>/.test(dentro)
+    ? dentro.split(/<br\s*\/?>/).map((s) => s.trim()).filter(Boolean).map((s) => `<p>${s}</p>`).join('')
+    : m));
 }
 
 const indicesUsados = (htmlLimpio) => [...new Set([...htmlLimpio.matchAll(/data-imagen="(\d+)"/g)].map((m) => Number(m[1])))];
@@ -66,11 +73,11 @@ function lineaDeAutor(a) {
     : escapar(a.name);
   if (!/^https?:\/\//i.test(a.photoUrl || '')) return `<p><em>Por ${nombre}${a.role ? ' · ' + escapar(a.role) : ''}</em></p>`;
   // Con foto: bloque con la foto redonda, el nombre grande y el cargo debajo. Los estilos van en línea (la web no
-  // tiene una clase para esto); la foto lleva además la clase alignleft por si WordPress recorta algún estilo.
+  // tiene una clase para esto); WordPress los conserva.
   const enlace = /^\s*https?:\/\//i.test(a.linkUrl || '')
-    ? ` – <a href="${escapar(a.linkUrl.trim())}" target="_blank" rel="noopener noreferrer">[Linkedin]</a>` : '';
+    ? ` – <a href="${escapar(a.linkUrl.trim())}" target="_blank" rel="noopener noreferrer" style="color:#c2185b">[Linkedin]</a>` : '';
   const cargo = a.role || enlace ? `<br><span style="color:#777;font-size:0.95em">${escapar(a.role || '')}${a.role ? enlace : enlace.replace(/^ – /, '')}</span>` : '';
-  return `<div style="display:flex;align-items:center;gap:16px;margin:0 0 24px"><img class="alignleft" src="${escapar(a.photoUrl)}" alt="${escapar(a.name)}" width="80" height="80" style="width:80px;height:80px;border-radius:50%;object-fit:cover;margin:0"><p style="margin:0"><strong style="font-size:1.5em;color:#000">${escapar(a.name)}</strong>${cargo}</p></div>`;
+  return `<div style="display:flex;align-items:center;gap:16px;margin:0 0 24px"><img src="${escapar(a.photoUrl)}" alt="${escapar(a.name)}" width="80" height="80" style="width:80px;height:80px;border-radius:50%;object-fit:cover;margin:0"><p style="margin:0"><strong style="font-size:1.5em;color:#000">${escapar(a.name)}</strong>${cargo}</p></div>`;
 }
 
 module.exports = { Invalido, tipoDeImagen, limpiar, indicesUsados, escapar, hayTexto, lineaDeAutor };

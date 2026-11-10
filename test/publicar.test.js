@@ -333,3 +333,8 @@ test('autores con foto: se sube a WordPress, el bloque sale con la foto y al cam
   assert.strictEqual((await adm.patch(`/api/authors/${r.json.author.id}`, f2)).status, 200);
   assert.strictEqual(wpSim.media.size, 1); // la anterior se borró
 });
+
+test('limpiar: un párrafo con saltos de línea se separa en párrafos; los renglones vacíos no quedan', () => {
+  assert.strictEqual(limpiar('<p>Uno<br>Dos<br><br>Tres</p>'), '<p>Uno</p><p>Dos</p><p>Tres</p>');
+  assert.strictEqual(limpiar('<p>Sin saltos</p>'), '<p>Sin saltos</p>');
+});
