@@ -119,6 +119,12 @@ test('limpiar: saca scripts, estilos, eventos y enlaces peligrosos; conserva el 
   assert.strictEqual((l.match(/<img/g) || []).length, 1);
 });
 
+test('limpiar: texto plano pegado (cada línea es un <div>) queda en párrafos; las líneas en blanco no dejan párrafos vacíos', () => {
+  const l = limpiar('Primero.<div><br></div><div>Segundo 😅.</div><div><br></div><div>Tercero.</div>');
+  assert.strictEqual(l, 'Primero.<p>Segundo 😅.</p><p>Tercero.</p>');
+  assert.strictEqual(limpiar('<p>a</p><p><br></p><p> &nbsp; </p><p><img data-imagen="0" alt="x"></p>'), '<p>a</p><p><img data-imagen="0" alt="x" /></p>');
+});
+
 test('limpiar con urls: el marcador pasa a la dirección de WordPress', () => {
   const l = limpiar(limpiar('<p>a</p><img data-imagen="0" alt="x"><img data-imagen="3">'), { 0: 'https://wp.example/u/a.png' });
   assert.match(l, /<img src="https:\/\/wp\.example\/u\/a\.png" alt="x" \/>/);

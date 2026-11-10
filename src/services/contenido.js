@@ -32,6 +32,7 @@ function limpiar(html, urls) {
     allowProtocolRelative: false,
     transformTags: {
       h1: 'h2',
+      div: 'p', // el editor del navegador convierte cada línea pegada en un <div>: pasa a ser un párrafo
       b: 'strong',
       i: 'em',
       // Un enlace sin dirección válida (por ejemplo javascript:) deja solo el texto.
@@ -45,7 +46,10 @@ function limpiar(html, urls) {
         return urls ? { tagName: 'img', attribs: { ...(urls[n] ? { src: urls[n] } : {}), alt } } : { tagName: 'img', attribs: { 'data-imagen': n, alt } };
       },
     },
-    exclusiveFilter: (f) => f.tag === 'img' && !(urls ? f.attribs.src : f.attribs['data-imagen']),
+    exclusiveFilter: (f) =>
+      (f.tag === 'img' && !(urls ? f.attribs.src : f.attribs['data-imagen'])) ||
+      // párrafos vacíos (las líneas en blanco del texto pegado), salvo que tengan una imagen
+      ((f.tag === 'p' || f.tag === 'div') && f.text.replace(/&nbsp;|\s/g, '') === '' && !f.mediaChildren.length),
   });
 }
 
