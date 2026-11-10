@@ -55,6 +55,16 @@ model LoginLog {
   @@index([createdAt])
 }
 
+// Autores que se pueden elegir al crear un blog. No son usuarios del sistema: solo salen escritos en el texto.
+model Author {
+  id        String   @id @default(cuid())
+  name      String
+  role      String?
+  linkUrl   String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
 enum DraftStatus {
   CREADO
   FALLIDO

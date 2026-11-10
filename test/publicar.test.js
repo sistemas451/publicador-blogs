@@ -19,7 +19,7 @@ const JPG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(4
 const WEBP = Buffer.concat([Buffer.from('RIFF'), Buffer.alloc(4), Buffer.from('WEBP'), Buffer.alloc(20)]);
 
 // ---- WordPress simulado ----
-let wpServer, app, base;
+let wpServer, app, base, autorBase;
 const wpSim = { media: new Map(), posts: [], tags: [], llamadas: [], falla: {}, sigId: 100 };
 const esperado = 'Basic ' + Buffer.from('publicador:abcd efgh'.replace(/\s+/g, '')).toString('base64');
 function reiniciarWp() { Object.assign(wpSim, { media: new Map(), posts: [], tags: [], llamadas: [], falla: {}, sigId: 100 }); wpCliente.limpiarCache(); }
@@ -72,7 +72,7 @@ function cliente() {
     let json = null; try { json = await r.json(); } catch { /* sin cuerpo */ }
     return { status: r.status, json };
   };
-  return { post: (r, b) => llamar('POST', r, b), get: (r) => llamar('GET', r) };
+  return { post: (r, b) => llamar('POST', r, b), get: (r) => llamar('GET', r), patch: (r, b) => llamar('PATCH', r, b) };
 }
 async function entrar(nombre, admin = false) {
   await prisma.user.create({ data: { email: correo(nombre), name: nombre, isAdmin: admin, passwordHash: await A.hashPassword(CLAVE), passwordChangedAt: new Date(Date.now() - 60000) } });
@@ -80,9 +80,9 @@ async function entrar(nombre, admin = false) {
   await c.post('/api/auth/login', { email: correo(nombre), password: CLAVE });
   return c;
 }
-function formulario({ title = 'Mi blog', categoryId = 7, author = 'Romina', html = '<p>Hola mundo</p>', featured, imagenes = [], extra = {} } = {}) {
+function formulario({ title = 'Mi blog', categoryId = 7, html = '<p>Hola mundo</p>', authorId = autorBase.id, featured, imagenes = [], extra = {} } = {}) {
   const f = new FormData();
-  f.append('title', title); f.append('categoryId', String(categoryId)); f.append('author', author); f.append('html', html);
+  f.append('title', title); f.append('categoryId', String(categoryId)); f.append('authorId', authorId); f.append('html', html);
   if (featured !== undefined) f.append('featured', String(featured));
   for (const [k, v] of Object.entries(extra)) f.append(k, v);
   imagenes.forEach((b, i) => f.append('imagenes', new Blob([b]), `foto${i}.png`));
@@ -90,6 +90,7 @@ function formulario({ title = 'Mi blog', categoryId = 7, author = 'Romina', html
 }
 
 test.before(async () => {
+  autorBase = await prisma.author.create({ data: { name: `Romina ${SUF}`, role: 'Marketing' } });
   wpServer = crearWpSimulado().listen(0);
   await new Promise((r) => wpServer.once('listening', r));
   Object.assign(config.wp, { url: `http://127.0.0.1:${wpServer.address().port}`, user: 'publicador', appPassword: 'abcd efgh', tagSlug: 'publicador' });
@@ -99,6 +100,7 @@ test.before(async () => {
 });
 test.beforeEach(reiniciarWp);
 test.after(async () => {
+  await prisma.author.deleteMany({ where: { name: { endsWith: ` ${SUF}` } } });
   app.close(); wpServer.close();
   await prisma.draft.deleteMany({ where: { user: { email: { endsWith: `-${SUF}@prueba.invalid` } } } });
   await prisma.loginLog.deleteMany({ where: { email: { endsWith: `-${SUF}@prueba.invalid` } } });
@@ -179,7 +181,7 @@ test('camino feliz: sube imágenes, arma el texto y crea UN borrador (draft) con
   assert.strictEqual(p.status, 'draft', 'siempre borrador, aunque el cliente mande status=publish');
   assert.deepStrictEqual(p.categories, [7]);
   assert.deepStrictEqual(p.tags, [50]);
-  assert.ok(p.content.startsWith('<p><em>Por Romina</em></p>'));
+  assert.ok(p.content.startsWith(`<p><em>Por Romina ${SUF} · Marketing</em></p>`));
   assert.ok(!/script|data-imagen/.test(p.content));
   assert.match(p.content, /<img src="https:\/\/wp\.example\/uploads\/img-\d+\.png" alt="segunda" \/>/);
   // se subieron solo la usada (1) y la destacada (0); la 2 no se usó
@@ -273,11 +275,41 @@ test('cada persona ve sus borradores; el administrador ve todos', async () => {
   assert.ok(todos.includes('De X') && todos.includes('De Y'));
 });
 
-test('el autor se escapa en la línea "Por ..." y sin autor no se agrega la línea', async () => {
+test('autores: la línea sale escapada con cargo y enlace; el autor es obligatorio y tiene que estar activo', async () => {
   const c = await entrar('autor');
-  await c.post('/api/drafts', formulario({ author: '<b>Ro</b> & "Co"' }));
-  assert.ok(wpSim.posts[0].content.startsWith('<p><em>Por &lt;b&gt;Ro&lt;/b&gt; &amp; &quot;Co&quot;</em></p>'));
+  const a = await prisma.author.create({ data: { name: `<b>Ro</b> & "Co" ${SUF}`, role: 'Jefa <i>', linkUrl: 'https://linkedin.com/in/x' } });
+  await c.post('/api/drafts', formulario({ authorId: a.id }));
+  const linea = wpSim.posts[0].content.split('\n')[0];
+  assert.ok(linea.startsWith('<p><em>Por <a href="https://linkedin.com/in/x" target="_blank" rel="noopener noreferrer">&lt;b&gt;Ro&lt;/b&gt; &amp; &quot;Co&quot;'), linea);
+  assert.ok(linea.includes('· Jefa &lt;i&gt;</em></p>'), linea);
   reiniciarWp();
-  await c.post('/api/drafts', formulario({ author: '' }));
-  assert.ok(wpSim.posts[0].content.startsWith('<p>Hola mundo</p>'));
+  assert.strictEqual((await c.post('/api/drafts', formulario({ authorId: '' }))).status, 400);
+  assert.strictEqual((await c.post('/api/drafts', formulario({ authorId: 'no-existe' }))).status, 400);
+  await prisma.author.update({ where: { id: a.id }, data: { active: false } });
+  assert.strictEqual((await c.post('/api/drafts', formulario({ authorId: a.id }))).status, 400);
+  assert.strictEqual(wpSim.posts.length, 0);
+  // sin cargo ni enlace: solo el nombre; un enlace que no es http no se usa
+  const b = await prisma.author.create({ data: { name: `Simple ${SUF}`, linkUrl: 'javascript:alert(1)' } });
+  await c.post('/api/drafts', formulario({ authorId: b.id }));
+  assert.ok(wpSim.posts[0].content.startsWith(`<p><em>Por Simple ${SUF}</em></p>`));
+});
+
+test('autores: todos los usuarios ven los activos; solo el admin agrega, edita y desactiva', async () => {
+  const adm = await entrar('adm-aut', true);
+  const u = await entrar('usr-aut');
+  assert.strictEqual((await u.post('/api/authors', { name: `X ${SUF}` })).status, 403);
+  assert.strictEqual((await adm.post('/api/authors', { name: '' })).status, 400);
+  assert.strictEqual((await adm.post('/api/authors', { name: `X ${SUF}`, linkUrl: 'ftp://x' })).status, 400);
+  const r = await adm.post('/api/authors', { name: `Nuevo ${SUF}`, role: ' Gerente ', linkUrl: '' });
+  assert.strictEqual(r.status, 201);
+  assert.strictEqual(r.json.author.role, 'Gerente');
+  const id = r.json.author.id;
+  assert.ok((await u.get('/api/authors')).json.authors.some((a) => a.id === id));
+  assert.strictEqual((await u.patch(`/api/authors/${id}`, { active: false })).status, 403);
+  assert.strictEqual((await adm.patch(`/api/authors/${id}`, { name: `Renombrado ${SUF}` })).json.author.role, 'Gerente');
+  await adm.patch(`/api/authors/${id}`, { active: false });
+  assert.ok(!(await u.get('/api/authors')).json.authors.some((a) => a.id === id));
+  assert.ok(!(await u.get('/api/authors?todos=1')).json.authors.some((a) => a.id === id));
+  assert.ok((await adm.get('/api/authors?todos=1')).json.authors.some((a) => a.id === id));
+  assert.strictEqual((await adm.patch('/api/authors/no-existe', { active: true })).status, 404);
 });

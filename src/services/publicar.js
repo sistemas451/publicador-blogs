@@ -3,14 +3,15 @@
 const prisma = require('../lib/prisma');
 const { config } = require('../config');
 const wp = require('./wordpress');
-const { Invalido, tipoDeImagen, limpiar, indicesUsados, escapar, hayTexto } = require('./contenido');
+const { Invalido, tipoDeImagen, limpiar, indicesUsados, hayTexto, lineaDeAutor } = require('./contenido');
 
-async function publicar({ user, titulo, categoriaId, autor, html, archivos, destacada }) {
+async function publicar({ user, titulo, categoriaId, autorId, html, archivos, destacada }) {
   // ---- Validación (nada de esto toca WordPress ni la base) ----
   titulo = String(titulo || '').trim();
   if (!titulo || titulo.length > 200) throw new Invalido('Falta el título (hasta 200 caracteres).');
-  autor = String(autor || '').trim();
-  if (autor.length > 100) throw new Invalido('El nombre del autor es demasiado largo.');
+  const autorFila = typeof autorId === 'string' && autorId ? await prisma.author.findUnique({ where: { id: autorId } }) : null;
+  if (!autorFila || !autorFila.active) throw new Invalido('Elegí el autor del blog.');
+  const autor = autorFila.name;
   if (!Number.isInteger(categoriaId)) throw new Invalido('Elegí una categoría.');
   if (archivos.length > config.maxImages) throw new Invalido(`Se pueden subir hasta ${config.maxImages} imágenes por blog.`);
 
@@ -44,7 +45,7 @@ async function publicar({ user, titulo, categoriaId, autor, html, archivos, dest
       subidos.push(r.id);
       urls[n] = r.url;
     }
-    const lineaAutor = autor ? `<p><em>Por ${escapar(autor)}</em></p>\n` : '';
+    const lineaAutor = lineaDeAutor(autorFila) + '\n';
     const contenido = lineaAutor + limpiar(limpio, urls);
 
     const etiqueta = await wp.etiquetaId();
@@ -61,7 +62,7 @@ async function publicar({ user, titulo, categoriaId, autor, html, archivos, dest
     let draft;
     try {
       draft = await prisma.draft.create({
-        data: { userId: user.id, title: titulo, wpPostId: post.id, wpEditUrl: post.editUrl, wpLink: post.link, categoryId: categoriaId, authorLine: autor || null, imageCount: subidos.length, status: 'CREADO' },
+        data: { userId: user.id, title: titulo, wpPostId: post.id, wpEditUrl: post.editUrl, wpLink: post.link, categoryId: categoriaId, authorLine: autor, imageCount: subidos.length, status: 'CREADO' },
       });
     } catch (e) {
       // El borrador ya existe en WordPress: no se lo borra por no poder anotarlo acá.
@@ -75,7 +76,7 @@ async function publicar({ user, titulo, categoriaId, autor, html, archivos, dest
     if (e instanceof wp.ErrorWp) {
       console.error('Falló la publicación:', e.detalle || e.message);
       await prisma.draft
-        .create({ data: { userId: user.id, title: titulo, categoryId: categoriaId, authorLine: autor || null, imageCount: 0, status: 'FALLIDO', error: (e.detalle || e.message).slice(0, 500) } })
+        .create({ data: { userId: user.id, title: titulo, categoryId: categoriaId, authorLine: autor, imageCount: 0, status: 'FALLIDO', error: (e.detalle || e.message).slice(0, 500) } })
         .catch(() => {});
     }
     throw e;

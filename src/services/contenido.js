@@ -59,4 +59,12 @@ const escapar = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').re
 // ¿Queda algún texto visible? (para rechazar un blog vacío)
 const hayTexto = (html) => sanitizeHtml(html, { allowedTags: [], allowedAttributes: {} }).replace(/&nbsp;|\s/g, '').length > 0;
 
-module.exports = { Invalido, tipoDeImagen, limpiar, indicesUsados, escapar, hayTexto };
+// Línea del autor al principio del blog: "Por Nombre · Cargo" (el nombre es un enlace si se cargó uno válido).
+function lineaDeAutor(a) {
+  const nombre = /^\s*https?:\/\//i.test(a.linkUrl || '')
+    ? `<a href="${escapar(a.linkUrl.trim())}" target="_blank" rel="noopener noreferrer">${escapar(a.name)}</a>`
+    : escapar(a.name);
+  return `<p><em>Por ${nombre}${a.role ? ' · ' + escapar(a.role) : ''}</em></p>`;
+}
+
+module.exports = { Invalido, tipoDeImagen, limpiar, indicesUsados, escapar, hayTexto, lineaDeAutor };

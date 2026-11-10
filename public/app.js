@@ -33,7 +33,7 @@ const enviar = (form, fn) => form.addEventListener('submit', async (e) => {
 const fecha = (iso) => new Date(iso).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
 
 // ---------- Vistas del panel ----------
-const VISTAS = ['nuevo', 'lista', 'usuarios'];
+const VISTAS = ['nuevo', 'lista', 'usuarios', 'autores'];
 async function irA(vista) {
   aviso('');
   for (const v of VISTAS) $('v-' + v).hidden = v !== vista;
@@ -41,6 +41,7 @@ async function irA(vista) {
     if (vista === 'nuevo') await prepararFormulario();
     if (vista === 'lista') await cargarBorradores();
     if (vista === 'usuarios') await cargarUsuarios();
+    if (vista === 'autores') await cargarAutores();
   } catch (err) { aviso(err.message, true); }
 }
 document.querySelectorAll('[data-vista]').forEach((b) => { b.onclick = () => irA(b.dataset.vista); });
@@ -50,6 +51,7 @@ async function mostrarPanel(user) {
   mostrar('panel');
   $('yo').textContent = `${user.name} (${user.email})`;
   $('nav-usuarios').hidden = !user.isAdmin;
+  $('nav-autores').hidden = !user.isAdmin;
   await irA('nuevo');
 }
 
@@ -64,7 +66,7 @@ $('f-blog').addEventListener('change', (e) => { if (e.target.name === 'destacada
 
 async function prepararFormulario() {
   const f = $('f-blog');
-  if (!f.elements.author.value && usuario) f.elements.author.value = usuario.name;
+  await cargarSelectorAutores();
   if (categoriasListas) return;
   const r = await api('GET', '/categories');
   limites = r.limits || limites;
@@ -214,7 +216,8 @@ $('b-previa').onclick = async () => {
       p.append('Imagen destacada:', document.createElement('br'), d);
       cont.appendChild(p);
     }
-    const autor = f.elements.author.value.trim();
+    const opcion = f.elements.authorId.selectedOptions[0];
+    const autor = opcion && opcion.value ? opcion.textContent : '';
     if (autor) { const p = document.createElement('p'); const em = document.createElement('em'); em.textContent = `Por ${autor}`; p.appendChild(em); cont.appendChild(p); }
     const cuerpo = document.createElement('div');
     cuerpo.innerHTML = html; // ya limpiado por el servidor
@@ -231,7 +234,6 @@ $('b-previa').onclick = async () => {
 
 function limpiarFormulario() {
   $('f-blog').reset();
-  $('f-blog').elements.author.value = usuario ? usuario.name : '';
   editor.replaceChildren();
   imgs.forEach((im) => URL.revokeObjectURL(im.url));
   imgs = [];
@@ -253,7 +255,7 @@ $('f-blog').addEventListener('submit', async (e) => {
     const fd = new FormData();
     fd.append('title', f.elements.title.value);
     fd.append('categoryId', f.elements.categoryId.value);
-    fd.append('author', f.elements.author.value);
+    fd.append('authorId', f.elements.authorId.value);
     fd.append('html', c.html);
     if (c.featured !== '') fd.append('featured', String(c.featured));
     c.files.forEach((file) => fd.append('imagenes', file));
@@ -303,6 +305,46 @@ async function cargarBorradores() {
     ul.appendChild(li);
   }
 }
+
+// ---------- Autores ----------
+async function cargarSelectorAutores() {
+  const sel = $('f-blog').elements.authorId;
+  const elegido = sel.value;
+  const { authors } = await api('GET', '/authors');
+  sel.replaceChildren();
+  const vacio = document.createElement('option');
+  vacio.value = ''; vacio.textContent = authors.length ? '— Elegí el autor —' : '(todavía no hay autores: pedile al administrador que los cargue)';
+  sel.appendChild(vacio);
+  for (const a of authors) {
+    const o = document.createElement('option');
+    o.value = a.id; o.textContent = a.name;
+    sel.appendChild(o);
+  }
+  if (authors.some((a) => a.id === elegido)) sel.value = elegido;
+}
+async function cargarAutores() {
+  const { authors } = await api('GET', '/authors?todos=1');
+  const ul = $('autores');
+  ul.replaceChildren();
+  for (const a of authors) {
+    const li = document.createElement('li');
+    li.textContent = `${a.name}${a.role ? ' · ' + a.role : ''}${a.linkUrl ? ' (' + a.linkUrl + ')' : ''}${a.active ? '' : ' [desactivado]'} `;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = a.active ? 'Desactivar' : 'Activar';
+    b.onclick = async () => {
+      try { await api('PATCH', '/authors/' + a.id, { active: !a.active }); await cargarAutores(); } catch (err) { aviso(err.message, true); }
+    };
+    li.appendChild(b);
+    ul.appendChild(li);
+  }
+}
+enviar($('f-autor'), async (d) => {
+  await api('POST', '/authors', d);
+  $('f-autor').reset();
+  aviso('Autor agregado.');
+  await cargarAutores();
+});
 
 // ---------- Usuarios (administrador) ----------
 async function cargarUsuarios() {

@@ -37,6 +37,7 @@
       <button type="button" data-vista="nuevo">Nuevo blog</button>
       <button type="button" data-vista="lista">Mis borradores</button>
       <button type="button" data-vista="usuarios" id="nav-usuarios" hidden>Usuarios</button>
+      <button type="button" data-vista="autores" id="nav-autores" hidden>Autores</button>
     </nav>
     <hr>
 
@@ -46,7 +47,7 @@
       <form id="f-blog">
         <p><label>Título<br><input type="text" name="title" required maxlength="200" size="70"></label></p>
         <p><label>Categoría<br><select name="categoryId" required></select></label></p>
-        <p><label>Autor (aparece como "Por ..." al principio)<br><input type="text" name="author" maxlength="100" size="40"></label></p>
+        <p><label>Autor (aparece como "Por ..." al principio)<br><select name="authorId" required></select></label></p>
 
         <p>Texto del blog (podés pegar con formato desde Word o Google Docs):</p>
         <p id="barra">
@@ -84,6 +85,18 @@
     <section id="v-lista" hidden>
       <h2>Borradores</h2>
       <ul id="borradores"></ul>
+    </section>
+
+    <section id="v-autores" hidden>
+      <h2>Autores</h2>
+      <p>Los que se pueden elegir al crear un blog. Salen como "Por Nombre · Cargo".</p>
+      <form id="f-autor">
+        <p><label>Nombre<br><input type="text" name="name" required maxlength="100"></label></p>
+        <p><label>Cargo (opcional)<br><input type="text" name="role" maxlength="100"></label></p>
+        <p><label>Enlace, por ejemplo LinkedIn (opcional)<br><input type="text" name="linkUrl" maxlength="300" size="50"></label></p>
+        <p><button type="submit">Agregar autor</button></p>
+      </form>
+      <ul id="autores"></ul>
     </section>
 
     <section id="v-usuarios" hidden>

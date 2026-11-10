@@ -74,7 +74,7 @@ router.get('/drafts', A.sesion, async (req, res) => {
   });
 });
 
-// Campos: title, categoryId, author (opcional), html, featured (opcional: número de la imagen destacada,
+// Campos: title, categoryId, authorId (id de un autor de /api/authors), html, featured (opcional: número de la imagen destacada,
 // empezando en 0) y los archivos en "imagenes". En el html cada imagen es <img data-imagen="N">.
 router.post('/drafts', unaALaVez, A.sesion, recibir, async (req, res) => {
   const b = req.body || {};
@@ -84,7 +84,7 @@ router.post('/drafts', unaALaVez, A.sesion, recibir, async (req, res) => {
       user: req.user,
       titulo: b.title,
       categoriaId: Number(b.categoryId),
-      autor: b.author,
+      autorId: b.authorId,
       html: b.html,
       archivos: req.files || [],
       destacada: Number.isInteger(destacada) ? destacada : null,
