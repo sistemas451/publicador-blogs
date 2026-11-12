@@ -7,6 +7,7 @@
     "preDeployCommand": "npx prisma migrate deploy",
     "startCommand": "node src/index.js",
     "healthcheckPath": "/api/health",
+    "sleepApplication": true,
     "healthcheckTimeout": 60,
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 3
