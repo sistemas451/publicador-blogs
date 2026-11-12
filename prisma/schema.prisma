@@ -20,6 +20,7 @@ model User {
   createdAt         DateTime   @default(now())
   tokens            Token[]
   drafts            Draft[]
+  guardados         Guardado[]
   logins            LoginLog[]
 }
 
@@ -89,4 +90,36 @@ model Draft {
   createdAt   DateTime    @default(now())
 
   @@index([createdAt])
+}
+
+// Blog a medio armar, guardado en la app con "Guardar en la app": todavía no se mandó a WordPress. Se borra solo
+// cuando se envía a WordPress (o lo borra la persona).
+model Guardado {
+  id         String           @id @default(cuid())
+  userId     String
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title      String           @default("")
+  categoryId Int?
+  authorId   String?
+  html       String           @default("")
+  featured   Int?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  imagenes   GuardadoImagen[]
+
+  @@index([userId])
+}
+
+// Imágenes de un guardado (ya achicadas por la pantalla). `posicion` es el número que usa el texto (data-imagen).
+model GuardadoImagen {
+  id         String   @id @default(cuid())
+  guardadoId String
+  guardado   Guardado @relation(fields: [guardadoId], references: [id], onDelete: Cascade)
+  posicion   Int
+  nombre     String
+  mime       String
+  alt        String   @default("")
+  datos      Bytes
+
+  @@unique([guardadoId, posicion])
 }

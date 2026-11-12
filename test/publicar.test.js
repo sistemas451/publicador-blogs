@@ -77,7 +77,7 @@ function cliente() {
     let json = null; try { json = await r.json(); } catch { /* sin cuerpo */ }
     return { status: r.status, json };
   };
-  return { post: (r, b) => llamar('POST', r, b), get: (r) => llamar('GET', r), patch: (r, b) => llamar('PATCH', r, b) };
+  return { post: (r, b) => llamar('POST', r, b), get: (r) => llamar('GET', r), patch: (r, b) => llamar('PATCH', r, b), put: (r, b) => llamar('PUT', r, b), del: (r) => llamar('DELETE', r), cookie: () => cookie };
 }
 async function entrar(nombre, admin = false) {
   await prisma.user.create({ data: { email: correo(nombre), name: nombre, isAdmin: admin, passwordHash: await A.hashPassword(CLAVE), passwordChangedAt: new Date(Date.now() - 60000) } });
@@ -371,4 +371,58 @@ test('Mis borradores muestra el estado actual en WordPress, y la lista sale igua
   wpSim.falla.estados = true;
   l = (await c.get('/api/drafts')).json.drafts;
   assert.ok(l.length >= 3 && l.every((d) => d.wpEstado === null));
+});
+
+test('guardar en la app: crear, listar, abrir con sus imágenes, reemplazar, borrar; cada uno ve los suyos', async () => {
+  const a = await entrar('guarda-a');
+  const b = await entrar('guarda-b');
+  const adm = await entrar('guarda-adm', true);
+  const f = new FormData();
+  f.append('title', 'A medias'); f.append('html', '<p>Hola <script>x</script></p><p><img data-imagen="0" alt="x"></p>');
+  f.append('featured', '0'); f.append('alts', JSON.stringify(['una foto']));
+  f.append('imagenes', new Blob([PNG]), 'foto.png');
+  const r = await a.post('/api/guardados', f);
+  assert.strictEqual(r.status, 201, JSON.stringify(r.json));
+  const id = r.json.guardado.id;
+  assert.ok(wpSim.llamadas.every((l) => !l.startsWith('POST')), 'no toca WordPress');
+  const lista = (await a.get('/api/guardados')).json.guardados;
+  assert.ok(lista.some((g) => g.id === id && g.imagenes === 1 && g.title === 'A medias'));
+  assert.ok(!(await b.get('/api/guardados')).json.guardados.some((g) => g.id === id));
+  assert.strictEqual((await b.get(`/api/guardados/${id}`)).status, 404);
+  assert.ok((await adm.get('/api/guardados')).json.guardados.some((g) => g.id === id));
+  const det = (await a.get(`/api/guardados/${id}`)).json.guardado;
+  assert.strictEqual(det.html, '<p>Hola </p><p><img data-imagen="0" alt="x" /></p>');
+  assert.deepStrictEqual(det.imagenes.map((i) => [i.posicion, i.mime, i.alt]), [[0, 'image/png', 'una foto']]);
+  const img = await fetch(`${base}/api/guardados/${id}/imagenes/0`, { headers: { Cookie: a.cookie() } });
+  assert.strictEqual(img.status, 200);
+  assert.ok(Buffer.from(await img.arrayBuffer()).equals(PNG));
+  const fb = await fetch(`${base}/api/guardados/${id}/imagenes/0`, { headers: { Cookie: b.cookie() } });
+  assert.strictEqual(fb.status, 404);
+  // reemplazar (sin imágenes)
+  const g2 = new FormData(); g2.append('title', 'Ya casi'); g2.append('html', '<p>Texto nuevo</p>');
+  assert.strictEqual((await a.put(`/api/guardados/${id}`, g2)).status, 200);
+  const det2 = (await a.get(`/api/guardados/${id}`)).json.guardado;
+  assert.strictEqual(det2.title, 'Ya casi'); assert.strictEqual(det2.imagenes.length, 0); assert.strictEqual(det2.featured, null);
+  assert.strictEqual((await b.put(`/api/guardados/${id}`, g2)).status, 404);
+  // validaciones
+  const mala = new FormData(); mala.append('html', 'x'); mala.append('imagenes', new Blob([Buffer.from('GIF89a-no')]), 'x.gif');
+  assert.strictEqual((await a.post('/api/guardados', mala)).status, 400);
+  const sinImg = new FormData(); sinImg.append('featured', '2');
+  assert.strictEqual((await a.post('/api/guardados', sinImg)).status, 400);
+  // borrar
+  assert.strictEqual((await b.del(`/api/guardados/${id}`)).status, 404);
+  assert.strictEqual((await a.del(`/api/guardados/${id}`)).status, 200);
+  assert.strictEqual((await a.get(`/api/guardados/${id}`)).status, 404);
+});
+
+test('enviar a WordPress un blog guardado lo saca de los guardados (solo si es tuyo)', async () => {
+  const a = await entrar('envia-guardado');
+  const otro = await entrar('envia-otro');
+  const g = new FormData(); g.append('title', 'Para enviar'); g.append('html', '<p>x</p>');
+  const id = (await a.post('/api/guardados', g)).json.guardado.id;
+  const ajeno = (await otro.post('/api/drafts', formulario({ extra: { guardadoId: id } }))).status;
+  assert.strictEqual(ajeno, 201);
+  assert.strictEqual((await a.get(`/api/guardados/${id}`)).status, 200, 'el de otro no se borra');
+  assert.strictEqual((await a.post('/api/drafts', formulario({ extra: { guardadoId: id } }))).status, 201);
+  assert.strictEqual((await a.get(`/api/guardados/${id}`)).status, 404);
 });

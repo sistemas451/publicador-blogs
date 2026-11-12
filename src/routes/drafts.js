@@ -119,6 +119,11 @@ router.post('/drafts', unaALaVez, A.sesion, recibir, async (req, res) => {
       archivos: req.files || [],
       destacada: Number.isInteger(destacada) ? destacada : null,
     });
+    // Si venía de un blog guardado en la app, ese guardado ya cumplió: se borra (solo si es de quien lo envía).
+    if (typeof b.guardadoId === 'string' && b.guardadoId) {
+      await prisma.guardado.deleteMany({ where: { id: b.guardadoId, ...(req.user.isAdmin ? {} : { userId: req.user.id }) } })
+        .catch((e) => console.error('No se pudo borrar el guardado enviado:', e.message));
+    }
     res.status(201).json({
       draft: { id: draft.id, title: draft.title, wpEditUrl: draft.wpEditUrl, wpLink: draft.wpLink, imageCount: draft.imageCount },
       advertencias,

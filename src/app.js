@@ -20,6 +20,7 @@ function createApp({ limiteIntentos = 15 } = {}) {
   app.use('/api/auth', limiteAuth(limiteIntentos), require('./routes/auth'));
   app.use('/api/users', require('./routes/users'));
   app.use('/api/authors', require('./routes/authors'));
+  app.use('/api/guardados', require('./routes/guardados'));
   app.use('/api', require('./routes/drafts'));
 
   app.use('/api', (req, res) => res.status(404).json({ error: 'No existe.' }));

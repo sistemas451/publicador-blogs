@@ -77,8 +77,13 @@ let categoriasListas = false;
 let imgs = []; // { file, url, alt, quitada }
 let rango = null; // última selección dentro del editor
 let destacadaSel = ''; // imagen destacada elegida ('' = ninguna); se recuerda porque la lista se vuelve a pintar
+let guardadoActual = null; // id del blog guardado en la app que se está editando (null = uno nuevo)
+let sucio = false; // hay cambios sin guardar ni enviar
 let sinDestacadaElegida = false; // la persona marcó "Sin imagen destacada": no se elige una sola
+editor.addEventListener('input', () => { sucio = true; });
+$('f-blog').addEventListener('input', () => { sucio = true; });
 $('f-blog').addEventListener('change', (e) => {
+  sucio = true;
   if (e.target.name === 'destacada') { destacadaSel = e.target.value; sinDestacadaElegida = e.target.value === ''; }
 });
 
@@ -229,6 +234,7 @@ async function agregarArchivos(files) {
     imgs.push({ file: r.file, url: URL.createObjectURL(r.file), alt: '', quitada: false });
     nuevos.push(imgs.length - 1);
   }
+  if (nuevos.length) sucio = true;
   if (nuevos.length && destacadaSel === '' && !sinDestacadaElegida) destacadaSel = String(nuevos[0]);
   pintarImagenes();
   return nuevos;
@@ -290,6 +296,7 @@ editor.addEventListener('drop', async (e) => {
 });
 function quitarImagen(i) {
   imgs[i].quitada = true;
+  sucio = true;
   editor.querySelectorAll(`img[data-imagen="${i}"]`).forEach((n) => {
     const fig = n.closest('figure'); const car = n.closest('[data-carrusel]');
     n.remove();
@@ -378,6 +385,9 @@ function limpiarFormulario() {
   imgs = [];
   destacadaSel = '';
   sinDestacadaElegida = false;
+  guardadoActual = null;
+  sucio = false;
+  mostrarEditando();
   pintarImagenes();
   elegirCategoriaUnica();
   $('vista').hidden = true;
@@ -409,6 +419,7 @@ $('b-traer').onclick = async () => {
     imgs.forEach((im) => URL.revokeObjectURL(im.url));
     imgs = []; destacadaSel = ''; sinDestacadaElegida = false;
     f.elements.title.value = r.titulo || '';
+    sucio = true;
     editor.innerHTML = r.html;
     const autor = autorQueCoincide(r.autor);
     if (autor) f.elements.authorId.value = autor;
@@ -438,16 +449,10 @@ $('f-blog').addEventListener('submit', async (e) => {
   const f = e.target;
   const boton = $('b-crear');
   boton.disabled = true;
-  boton.textContent = 'Creando el borrador…';
+  boton.textContent = 'Enviando a WordPress…';
   try {
-    const c = construir();
-    const fd = new FormData();
-    fd.append('title', f.elements.title.value);
-    fd.append('categoryId', f.elements.categoryId.value);
-    fd.append('authorId', f.elements.authorId.value);
-    fd.append('html', c.html);
-    if (c.featured !== '') fd.append('featured', String(c.featured));
-    c.files.forEach((file) => fd.append('imagenes', file));
+    const { fd } = datosDelFormulario();
+    if (guardadoActual) fd.append('guardadoId', guardadoActual);
     const r = await fetch('/api/drafts', { method: 'POST', body: fd, credentials: 'same-origin' });
     let json = {};
     try { json = await r.json(); } catch { /* sin cuerpo */ }
@@ -459,22 +464,131 @@ $('f-blog').addEventListener('submit', async (e) => {
     res.appendChild(p);
     for (const a of json.advertencias || []) { const w = document.createElement('p'); w.style.color = 'darkorange'; w.textContent = a; res.appendChild(w); }
     if (usuario && usuario.isAdmin && json.draft.wpEditUrl) res.appendChild(botonWordpress(json.draft.wpEditUrl, 'Revisar en WordPress'));
-    limpiarFormulario();
+    limpiarFormulario(); // (si venía de un guardado, el servidor ya lo borró)
   } catch (err) {
     aviso(err.message, true);
   } finally {
     boton.disabled = false;
-    boton.textContent = 'Crear borrador';
+    boton.textContent = 'Enviar a WordPress como borrador';
   }
 });
 
 // Avisa antes de cerrar la pestaña si hay un blog a medio escribir.
 window.addEventListener('beforeunload', (e) => {
-  if (!$('panel').hidden && (editor.textContent.trim() || $('f-blog').elements.title.value.trim())) { e.preventDefault(); e.returnValue = ''; }
+  if (!$('panel').hidden && sucio && (editor.textContent.trim() || $('f-blog').elements.title.value.trim() || imgs.some((x) => !x.quitada))) { e.preventDefault(); e.returnValue = ''; }
 });
+
+// ---------- Guardar en la app ----------
+// Lo que se manda (a WordPress o a la app): mismos campos; para la app van además los textos alternativos.
+function datosDelFormulario() {
+  const f = $('f-blog');
+  const c = construir();
+  const fd = new FormData();
+  fd.append('title', f.elements.title.value);
+  fd.append('categoryId', f.elements.categoryId.value);
+  fd.append('authorId', f.elements.authorId.value);
+  fd.append('html', c.html);
+  if (c.featured !== '') fd.append('featured', String(c.featured));
+  c.files.forEach((file) => fd.append('imagenes', file));
+  const alts = imgs.filter((x) => !x.quitada).map((x) => x.alt || '');
+  return { fd, alts };
+}
+const horaCorta = (iso) => new Date(iso).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+function mostrarEditando(fechaGuardado) {
+  const p = $('editando');
+  if (!guardadoActual) { p.hidden = true; p.replaceChildren(); return; }
+  p.hidden = false;
+  p.replaceChildren(`Estás siguiendo un blog guardado en la app${fechaGuardado ? ` (última vez: ${horaCorta(fechaGuardado)})` : ''}. `);
+  const b = document.createElement('button');
+  b.type = 'button'; b.textContent = 'Empezar uno nuevo';
+  b.onclick = () => { if (!sucio || confirm('Hay cambios sin guardar. ¿Empezar uno nuevo igual?')) { limpiarFormulario(); aviso(''); } };
+  p.appendChild(b);
+}
+$('b-guardar').onclick = async () => {
+  aviso('');
+  const b = $('b-guardar');
+  b.disabled = true; b.textContent = 'Guardando…';
+  try {
+    const { fd, alts } = datosDelFormulario();
+    fd.append('alts', JSON.stringify(alts));
+    const r = await fetch(guardadoActual ? `/api/guardados/${guardadoActual}` : '/api/guardados', { method: guardadoActual ? 'PUT' : 'POST', body: fd, credentials: 'same-origin' });
+    let json = {};
+    try { json = await r.json(); } catch { /* sin cuerpo */ }
+    if (!r.ok) throw new Error(json.error || 'No se pudo guardar.');
+    guardadoActual = json.guardado.id;
+    sucio = false;
+    mostrarEditando(json.guardado.updatedAt);
+    aviso(`Guardado en la app (${horaCorta(json.guardado.updatedAt)}). No se mandó nada a la web: lo seguís desde "Mis borradores".`);
+  } catch (err) {
+    aviso(err.message, true);
+  } finally {
+    b.disabled = false; b.textContent = 'Guardar en la app';
+  }
+};
+
+async function cargarGuardados() {
+  const { guardados } = await api('GET', '/guardados');
+  const ul = $('guardados');
+  ul.replaceChildren();
+  if (!guardados.length) { const li = document.createElement('li'); li.textContent = 'No hay blogs guardados en la app.'; ul.appendChild(li); return; }
+  for (const g of guardados) {
+    const li = document.createElement('li');
+    const t = document.createElement('b'); t.textContent = g.title || '(sin título)';
+    li.append(t, ` — guardado el ${horaCorta(g.updatedAt)}${g.imagenes ? ` — ${g.imagenes} ${g.imagenes === 1 ? 'imagen' : 'imágenes'}` : ''}${usuario.isAdmin ? ` — de ${g.by}` : ''} `);
+    const seguir = document.createElement('button');
+    seguir.type = 'button'; seguir.textContent = 'Seguir editando';
+    seguir.onclick = () => abrirGuardado(g.id);
+    const borrar = document.createElement('button');
+    borrar.type = 'button'; borrar.textContent = 'Borrar';
+    borrar.onclick = async () => {
+      if (!confirm(`¿Borrar "${g.title || 'sin título'}" de la app? No se puede recuperar.`)) return;
+      try { await api('DELETE', `/guardados/${g.id}`); if (guardadoActual === g.id) limpiarFormulario(); await cargarGuardados(); } catch (err) { aviso(err.message, true); }
+    };
+    li.append(seguir, ' ', borrar);
+    ul.appendChild(li);
+  }
+}
+
+async function abrirGuardado(id) {
+  if (sucio && !confirm('El blog que tenés abierto tiene cambios sin guardar. ¿Abrir el otro igual?')) return;
+  aviso('');
+  try {
+    const { guardado: g } = await api('GET', `/guardados/${id}`);
+    const files = [];
+    for (const im of g.imagenes) {
+      const r = await fetch(`/api/guardados/${id}/imagenes/${im.posicion}`, { credentials: 'same-origin' });
+      if (!r.ok) throw new Error('No se pudo traer una de las imágenes guardadas.');
+      files.push({ file: new File([await r.blob()], im.nombre, { type: im.mime }), alt: im.alt });
+    }
+    await irA('nuevo');
+    limpiarFormulario();
+    const f = $('f-blog');
+    f.elements.title.value = g.title;
+    if (g.categoryId !== null) f.elements.categoryId.value = String(g.categoryId);
+    if (g.authorId) f.elements.authorId.value = g.authorId;
+    imgs = files.map((x) => ({ file: x.file, url: URL.createObjectURL(x.file), alt: x.alt, quitada: false }));
+    destacadaSel = g.featured === null ? '' : String(g.featured);
+    sinDestacadaElegida = g.featured === null && imgs.length > 0;
+    editor.innerHTML = g.html;
+    editor.querySelectorAll('img[data-imagen]').forEach((n) => {
+      const im = imgs[Number(n.getAttribute('data-imagen'))];
+      if (!im) { n.remove(); return; }
+      n.src = im.url; n.setAttribute('style', 'max-width:100%');
+    });
+    editor.querySelectorAll('[data-carrusel]').forEach((d) => { d.setAttribute('contenteditable', 'false'); estiloCarrusel(d, false); });
+    pintarImagenes();
+    guardadoActual = g.id;
+    sucio = false;
+    mostrarEditando(g.updatedAt);
+    aviso(`Abriste "${g.title || 'sin título'}". Cuando esté listo, mandalo con "Enviar a WordPress como borrador".`);
+  } catch (err) {
+    aviso(err.message, true);
+  }
+}
 
 // ---------- Lista de borradores ----------
 async function cargarBorradores() {
+  await cargarGuardados();
   const { drafts } = await api('GET', '/drafts');
   const ul = $('borradores');
   ul.replaceChildren();
