@@ -4,13 +4,13 @@
   "private": true,
   "description": "Publicador de blogs de Myselec: crea borradores en WordPress. Nunca publica.",
   "engines": {
-    "node": ">=22"
+    "node": "22.x"
   },
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
     "dev:client": "vite --config client/vite.config.mjs",
-    "build": "vite build --config client/vite.config.mjs && prisma generate",
+    "build": "prisma generate",
     "test": "node --test"
   },
   "dependencies": {
