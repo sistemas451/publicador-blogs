@@ -13,7 +13,7 @@ function tipoDeImagen(b) {
   return null;
 }
 
-const ETIQUETAS = ['p', 'br', 'h2', 'h3', 'h4', 'strong', 'em', 'u', 's', 'ul', 'ol', 'li', 'a', 'blockquote', 'img', 'hr',
+const ETIQUETAS = ['div', 'p', 'br', 'h2', 'h3', 'h4', 'strong', 'em', 'u', 's', 'ul', 'ol', 'li', 'a', 'blockquote', 'img', 'hr',
   'table', 'thead', 'tbody', 'tr', 'th', 'td', 'figure', 'figcaption'];
 
 // Sin `urls`: deja las imágenes como marcador (data-imagen="N"); las que no tienen un marcador válido se sacan.
@@ -22,6 +22,7 @@ function limpiar(html, urls) {
   return aParrafos(sanitizeHtml(String(html || ''), {
     allowedTags: ETIQUETAS,
     allowedAttributes: {
+      div: ['data-carrusel', 'class'],
       a: ['href', 'target', 'rel'],
       img: ['src', 'data-imagen', 'alt'],
       th: ['colspan', 'rowspan'],
@@ -32,7 +33,11 @@ function limpiar(html, urls) {
     allowProtocolRelative: false,
     transformTags: {
       h1: 'h2',
-      div: 'p', // el editor del navegador convierte cada línea pegada en un <div>: pasa a ser un párrafo
+      // El editor del navegador convierte cada línea pegada en un <div>: pasa a ser un párrafo. La excepción es el
+      // carrusel (<div data-carrusel>): queda como bloque; al publicar lleva la clase que usa la plantilla.
+      div: (tag, a) => (a['data-carrusel'] !== undefined
+        ? { tagName: 'div', attribs: urls ? { class: 'publicador-carrusel' } : { 'data-carrusel': '1' } }
+        : { tagName: 'p', attribs: {} }),
       b: 'strong',
       i: 'em',
       // Un enlace sin dirección válida (por ejemplo javascript:) deja solo el texto.
@@ -49,8 +54,9 @@ function limpiar(html, urls) {
     exclusiveFilter: (f) =>
       (f.tag === 'img' && !(urls ? f.attribs.src : f.attribs['data-imagen'])) ||
       // párrafos vacíos (las líneas en blanco del texto pegado), salvo que tengan una imagen
-      ((f.tag === 'p' || f.tag === 'div') && f.text.replace(/&nbsp;|\s/g, '') === '' && !f.mediaChildren.length),
-  }));
+      // (el carrusel no: sus imágenes están un nivel más adentro, en <figure>; si queda vacío se saca abajo)
+      ((f.tag === 'p' || (f.tag === 'div' && !f.attribs['data-carrusel'] && !f.attribs.class)) && f.text.replace(/&nbsp;|\s/g, '') === '' && !f.mediaChildren.length),
+  })).replace(/<div (?:data-carrusel="1"|class="publicador-carrusel")>(?:<figure><\/figure>|\s)*<\/div>/g, '');
 }
 
 // Texto pegado con un salto de línea por renglón llega como UN párrafo con <br>: cada renglón pasa a ser un párrafo.

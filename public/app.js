@@ -243,6 +243,31 @@ function insertarImagen(i) {
   restaurarRango();
   document.execCommand('insertHTML', false, marcador(i).outerHTML);
 }
+// Carrusel: un bloque con varias imágenes que en la web se ven de a una, deslizables (la plantilla le pone las
+// flechas). En el editor se muestra como una tira horizontal con borde punteado.
+function estiloCarrusel(div, enVista) {
+  div.setAttribute('style', enVista
+    ? 'display:flex;overflow-x:auto;scroll-snap-type:x mandatory;max-width:800px'
+    : 'display:flex;gap:8px;overflow-x:auto;border:2px dashed #888;padding:6px;margin:8px 0');
+  div.querySelectorAll('figure').forEach((f) => f.setAttribute('style', enVista ? 'flex:0 0 100%;margin:0;scroll-snap-align:start' : 'flex:0 0 220px;margin:0'));
+  div.querySelectorAll('img').forEach((im) => im.setAttribute('style', 'width:100%;height:auto;display:block'));
+}
+function carrusel(indices) {
+  const div = document.createElement('div');
+  div.setAttribute('data-carrusel', '1');
+  div.setAttribute('contenteditable', 'false');
+  indices.forEach((i) => { const f = document.createElement('figure'); f.appendChild(marcador(i)); div.appendChild(f); });
+  estiloCarrusel(div, false);
+  return div;
+}
+$('b-carrusel').onclick = () => {
+  const usadas = new Set([...editor.querySelectorAll('img[data-imagen]')].map((n) => Number(n.getAttribute('data-imagen'))));
+  const libres = imgs.map((im, i) => i).filter((i) => !imgs[i].quitada && !usadas.has(i));
+  if (libres.length < 2) { aviso('Para un carrusel hacen falta al menos 2 imágenes que todavía no estén en el texto.', true); return; }
+  restaurarRango();
+  document.execCommand('insertHTML', false, carrusel(libres).outerHTML + '<p><br></p>');
+  aviso(`Se armó un carrusel con ${libres.length} imágenes.`);
+};
 
 // Arrastrar imágenes al texto: se agregan a la lista y quedan donde se soltaron.
 editor.addEventListener('dragover', (e) => { if ([...e.dataTransfer.types].includes('Files')) e.preventDefault(); });
@@ -257,7 +282,12 @@ editor.addEventListener('drop', async (e) => {
 });
 function quitarImagen(i) {
   imgs[i].quitada = true;
-  editor.querySelectorAll(`img[data-imagen="${i}"]`).forEach((n) => n.remove());
+  editor.querySelectorAll(`img[data-imagen="${i}"]`).forEach((n) => {
+    const fig = n.closest('figure'); const car = n.closest('[data-carrusel]');
+    n.remove();
+    if (fig && !fig.querySelector('img')) fig.remove();
+    if (car && !car.querySelector('img')) car.remove();
+  });
   URL.revokeObjectURL(imgs[i].url);
   pintarImagenes();
 }
@@ -326,6 +356,7 @@ $('b-previa').onclick = async () => {
       img.removeAttribute('data-imagen');
       img.style.maxWidth = '100%';
     });
+    cuerpo.querySelectorAll('[data-carrusel]').forEach((d) => estiloCarrusel(d, true));
     cont.appendChild(cuerpo);
     $('vista').hidden = false;
     $('vista').scrollIntoView();
@@ -379,12 +410,8 @@ $('b-traer').onclick = async () => {
       return new File([arr], im.nombre, { type: im.mime });
     });
     const idx = await agregarArchivos(files);
-    // Un documento (carrusel) va completo al final del texto; una foto sola queda solo como destacada.
-    if (r.tipo === 'documento') {
-      const s = getSelection(); const rg = document.createRange();
-      rg.selectNodeContents(editor); rg.collapse(false); s.removeAllRanges(); s.addRange(rg); rango = rg.cloneRange();
-      idx.forEach((i) => { const p = document.createElement('p'); p.appendChild(marcador(i)); editor.appendChild(p); });
-    }
+    // Un documento va completo, como carrusel, al final del texto; una foto sola queda solo como destacada.
+    if (r.tipo === 'documento' && idx.length > 1) editor.appendChild(carrusel(idx));
     const notas = [`Listo: se trajo el texto${idx.length ? ` y ${idx.length === 1 ? '1 imagen' : idx.length + ' imágenes'}` : ''}.`];
     if (!autor) notas.push(r.autor ? `El autor de LinkedIn (${r.autor}) no está en la lista: elegilo a mano.` : 'Elegí el autor.');
     notas.push('Revisá el título (es la primera oración del posteo) y el texto antes de crear el borrador.');

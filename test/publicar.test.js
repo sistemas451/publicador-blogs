@@ -339,3 +339,15 @@ test('limpiar: un párrafo con saltos de línea se separa en párrafos; los reng
   assert.strictEqual(limpiar('<p>Uno<br>Dos<br><br>Tres</p>'), '<p>Uno</p><p>Dos</p><p>Tres</p>');
   assert.strictEqual(limpiar('<p>Sin saltos</p>'), '<p>Sin saltos</p>');
 });
+
+test('carrusel: se conserva como bloque, se publica con la clase de la plantilla y sus imágenes se suben', async () => {
+  assert.strictEqual(limpiar('<div data-carrusel="1"></div><div data-carrusel="1"><figure><img src="http://x/y.jpg"></figure></div>'), '');
+  assert.strictEqual(limpiar('<div class="x">linea</div>'), '<p>linea</p>');
+  const c = await entrar('carrusel');
+  const html = '<p>Texto</p><div data-carrusel="1"><figure><img data-imagen="0" alt="uno"></figure><figure><img data-imagen="1" alt="dos"></figure></div>';
+  const r = await c.post('/api/drafts', formulario({ html, imagenes: [PNG, JPG] }));
+  assert.strictEqual(r.status, 201, JSON.stringify(r.json));
+  const cont = wpSim.posts[0].content;
+  assert.match(cont, /<div class="publicador-carrusel"><figure><img src="[^"]+" alt="uno" \/><\/figure><figure><img src="[^"]+" alt="dos" \/><\/figure><\/div>/);
+  assert.strictEqual(wpSim.media.size, 2);
+});
