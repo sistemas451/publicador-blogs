@@ -37,6 +37,14 @@ const enviar = (form, fn) => form.addEventListener('submit', async (e) => {
   aviso('');
   try { await fn(datos(form)); } catch (err) { aviso(err.message, true); }
 });
+// Botón que abre el borrador directo en el editor de WordPress (pestaña nueva). Solo para administradores: pide
+// estar logueado en WordPress.
+function botonWordpress(url, texto) {
+  const b = document.createElement('button');
+  b.type = 'button'; b.textContent = texto;
+  b.onclick = () => window.open(url, '_blank', 'noopener');
+  return b;
+}
 const fecha = (iso) => new Date(iso).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
 
 // ---------- Vistas del panel ----------
@@ -450,11 +458,7 @@ $('f-blog').addEventListener('submit', async (e) => {
     p.textContent = `Listo: el borrador "${json.draft.title}" quedó creado. Facundo lo va a revisar y publicar.`;
     res.appendChild(p);
     for (const a of json.advertencias || []) { const w = document.createElement('p'); w.style.color = 'darkorange'; w.textContent = a; res.appendChild(w); }
-    if (usuario && usuario.isAdmin && json.draft.wpEditUrl) {
-      const a = document.createElement('a');
-      a.href = json.draft.wpEditUrl; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = 'Abrir el borrador en WordPress';
-      res.appendChild(a);
-    }
+    if (usuario && usuario.isAdmin && json.draft.wpEditUrl) res.appendChild(botonWordpress(json.draft.wpEditUrl, 'Revisar en WordPress'));
     limpiarFormulario();
   } catch (err) {
     aviso(err.message, true);
@@ -477,11 +481,18 @@ async function cargarBorradores() {
   if (!drafts.length) { const li = document.createElement('li'); li.textContent = 'Todavía no hay borradores.'; ul.appendChild(li); return; }
   for (const d of drafts) {
     const li = document.createElement('li');
-    li.textContent = `${fecha(d.createdAt)} — ${d.title} — ${d.status === 'CREADO' ? 'creado' : 'no se pudo crear'}${usuario.isAdmin ? ` — por ${d.by}` : ''} `;
-    if (usuario.isAdmin && d.wpEditUrl) {
-      const a = document.createElement('a');
-      a.href = d.wpEditUrl; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.textContent = 'Abrir en WordPress';
-      li.appendChild(a);
+    const ESTADOS = { publish: 'PUBLICADO', future: 'programado para publicarse', draft: 'en borrador (falta revisar y publicar)', pending: 'pendiente de revisión', private: 'publicado como privado', trash: 'en la papelera de WordPress', borrado: 'ya no está en WordPress' };
+    const estado = d.status !== 'CREADO' ? 'no se pudo crear' : d.wpEstado ? ESTADOS[d.wpEstado] || d.wpEstado : 'creado (no se pudo consultar el estado)';
+    li.append(`${fecha(d.createdAt)} — `);
+    const t = document.createElement('b'); t.textContent = d.title; li.appendChild(t);
+    li.append(` — ${estado}${usuario.isAdmin ? ` — cargado por ${d.by}` : ''} `);
+    if (d.wpLink) {
+      const v = document.createElement('a');
+      v.href = d.wpLink; v.target = '_blank'; v.rel = 'noopener noreferrer'; v.textContent = 'Ver el blog';
+      li.append(v, ' ');
+    }
+    if (usuario.isAdmin && d.wpEditUrl && d.wpEstado !== 'borrado') {
+      li.appendChild(botonWordpress(d.wpEditUrl, ['publish', 'private', 'future'].includes(d.wpEstado) ? 'Editar en WordPress' : 'Revisar en WordPress'));
     }
     ul.appendChild(li);
   }

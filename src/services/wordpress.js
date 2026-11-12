@@ -97,4 +97,11 @@ async function crearBorrador({ titulo, contenido, categoriaId, destacadaId, etiq
   };
 }
 
-module.exports = { ErrorWp, categorias, limpiarCache, etiquetaId, subirImagen, borrarMedio, crearBorrador };
+// Estado actual en WordPress de varias entradas (las del usuario del publicador). Las que no aparecen se borraron.
+async function estados(ids) {
+  if (!ids.length) return new Map();
+  const lista = await wp('GET', `/wp/v2/posts?include=${ids.join(',')}&status=publish,future,draft,pending,private,trash&per_page=100&context=edit&_fields=id,status,link`);
+  return new Map(lista.map((p) => [p.id, { estado: p.status, link: p.link }]));
+}
+
+module.exports = { estados, ErrorWp, categorias, limpiarCache, etiquetaId, subirImagen, borrarMedio, crearBorrador };

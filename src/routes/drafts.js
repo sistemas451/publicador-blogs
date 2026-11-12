@@ -82,12 +82,25 @@ router.get('/drafts', A.sesion, async (req, res) => {
     take: 100,
     include: { user: { select: { name: true } } },
   });
+  // Estado actual en WordPress (en borrador, publicado, en la papelera o borrado). Si WordPress no responde, la
+  // lista sale igual, sin el estado.
+  let estados = null;
+  try {
+    estados = await wp.estados(lista.filter((d) => d.wpPostId).map((d) => d.wpPostId));
+  } catch (e) {
+    console.error('Estado de los borradores:', e.detalle || e.message);
+  }
   res.json({
-    drafts: lista.map((d) => ({
-      id: d.id, title: d.title, status: d.status, wpEditUrl: d.wpEditUrl, wpLink: d.wpLink,
-      imageCount: d.imageCount, error: d.status === 'FALLIDO' ? 'No se pudo crear en WordPress.' : null,
-      createdAt: d.createdAt, by: d.user.name,
-    })),
+    drafts: lista.map((d) => {
+      const e = d.wpPostId && estados ? estados.get(d.wpPostId) || { estado: 'borrado' } : null;
+      return {
+        id: d.id, title: d.title, status: d.status, wpEditUrl: d.wpEditUrl,
+        imageCount: d.imageCount, error: d.status === 'FALLIDO' ? 'No se pudo crear en WordPress.' : null,
+        createdAt: d.createdAt, by: d.user.name,
+        wpEstado: e ? e.estado : null, // publish | future | draft | pending | private | trash | borrado | null (no se sabe)
+        wpLink: e && e.estado === 'publish' ? e.link : null,
+      };
+    }),
   });
 });
 

@@ -47,6 +47,11 @@ function crearWpSimulado() {
         return responder(201, { id, source_url: `https://wp.example/uploads/img-${id}.png` });
       }
       if (req.method === 'DELETE' && ruta.startsWith('/wp/v2/media/')) { wpSim.media.delete(Number(ruta.split('/').pop())); return responder(200, { deleted: true }); }
+      if (req.method === 'GET' && ruta === '/wp/v2/posts') {
+        if (wpSim.falla.estados) return responder(500, { code: 'x', message: 'caido' });
+        const ids = (url.searchParams.get('include') || '').split(',').map(Number);
+        return responder(200, wpSim.posts.filter((p) => ids.includes(p.id) && !p.borrado).map((p) => ({ id: p.id, status: p.status, link: `https://wp.example/blog-${p.id}/` })));
+      }
       if (req.method === 'POST' && ruta === '/wp/v2/posts') {
         if (wpSim.falla.post) return responder(500, { code: 'x', message: 'boom' });
         const p = { id: wpSim.sigId++, ...JSON.parse(cuerpo) }; wpSim.posts.push(p);
@@ -350,4 +355,20 @@ test('carrusel: se conserva como bloque, se publica con la clase de la plantilla
   const cont = wpSim.posts[0].content;
   assert.match(cont, /<div class="publicador-carrusel"><figure><img src="[^"]+" alt="uno" \/><\/figure><figure><img src="[^"]+" alt="dos" \/><\/figure><\/div>/);
   assert.strictEqual(wpSim.media.size, 2);
+});
+
+
+test('Mis borradores muestra el estado actual en WordPress, y la lista sale igual si WordPress no responde', async () => {
+  const c = await entrar('estados');
+  for (const t of ['Uno', 'Dos', 'Tres']) await c.post('/api/drafts', formulario({ title: `Estado ${t} ${SUF}` }));
+  const [p1, p2, p3] = wpSim.posts.slice(-3);
+  p2.status = 'publish'; p3.borrado = true;
+  let l = (await c.get('/api/drafts')).json.drafts.filter((d) => d.title.endsWith(SUF) && d.title.startsWith('Estado'));
+  const por = Object.fromEntries(l.map((d) => [d.title.split(' ')[1], d]));
+  assert.strictEqual(por.Uno.wpEstado, 'draft'); assert.strictEqual(por.Uno.wpLink, null);
+  assert.strictEqual(por.Dos.wpEstado, 'publish'); assert.strictEqual(por.Dos.wpLink, `https://wp.example/blog-${p2.id}/`);
+  assert.strictEqual(por.Tres.wpEstado, 'borrado');
+  wpSim.falla.estados = true;
+  l = (await c.get('/api/drafts')).json.drafts;
+  assert.ok(l.length >= 3 && l.every((d) => d.wpEstado === null));
 });
