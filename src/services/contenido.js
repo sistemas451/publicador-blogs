@@ -68,16 +68,17 @@ const hayTexto = (html) => sanitizeHtml(html, { allowedTags: [], allowedAttribut
 
 // Línea del autor al principio del blog: "Por Nombre · Cargo" (el nombre es un enlace si se cargó uno válido).
 function lineaDeAutor(a) {
-  const nombre = /^\s*https?:\/\//i.test(a.linkUrl || '')
-    ? `<a href="${escapar(a.linkUrl.trim())}" target="_blank" rel="noopener noreferrer">${escapar(a.name)}</a>`
-    : escapar(a.name);
-  if (!/^https?:\/\//i.test(a.photoUrl || '')) return `<p><em>Por ${nombre}${a.role ? ' · ' + escapar(a.role) : ''}</em></p>`;
-  // Con foto: bloque con la foto redonda, el nombre grande y el cargo debajo. Los estilos van en línea (la web no
-  // tiene una clase para esto); WordPress los conserva.
+  // Bloque del autor: foto redonda (si hay), nombre grande y cargo debajo. Siempre mide lo mismo (96 px de alto y
+  // 72 px de margen abajo): la plantilla "Blog publicador" pone los botones de compartir a su derecha y la fecha
+  // justo debajo, y para eso necesita saber dónde termina. Estilos en línea (WordPress los conserva); la clase
+  // publicador-autor la usa la plantilla.
   const enlace = /^\s*https?:\/\//i.test(a.linkUrl || '')
     ? ` – <a href="${escapar(a.linkUrl.trim())}" target="_blank" rel="noopener noreferrer" style="color:#c2185b">[Linkedin]</a>` : '';
   const cargo = a.role || enlace ? `<br><span style="color:#777;font-size:0.95em">${escapar(a.role || '')}${a.role ? enlace : enlace.replace(/^ – /, '')}</span>` : '';
-  return `<div style="display:flex;align-items:center;gap:16px;margin:0 0 24px"><img src="${escapar(a.photoUrl)}" alt="${escapar(a.name)}" width="80" height="80" style="width:80px;height:80px;border-radius:50%;object-fit:cover;margin:0"><p style="margin:0"><strong style="font-size:1.5em;color:#000">${escapar(a.name)}</strong>${cargo}</p></div>`;
+  const foto = /^https?:\/\//i.test(a.photoUrl || '')
+    ? `<div style="flex:none;line-height:0"><img src="${escapar(a.photoUrl)}" alt="${escapar(a.name)}" width="96" height="96" style="width:96px;height:96px;border-radius:50%;object-fit:cover;margin:0"></div>` : '';
+  // Solo <div>: con <p> el formateador de WordPress (wpautop) agrega un párrafo vacío entre la foto y el nombre.
+  return `<div class="publicador-autor" style="display:flex;align-items:center;gap:20px;min-height:96px;margin:0 0 72px">${foto}<div><strong style="font-size:1.6em;color:#000">${escapar(a.name)}</strong>${cargo}</div></div>`;
 }
 
 module.exports = { Invalido, tipoDeImagen, limpiar, indicesUsados, escapar, hayTexto, lineaDeAutor };

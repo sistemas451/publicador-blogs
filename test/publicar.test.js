@@ -181,7 +181,7 @@ test('camino feliz: sube imágenes, arma el texto y crea UN borrador (draft) con
   assert.strictEqual(p.status, 'draft', 'siempre borrador, aunque el cliente mande status=publish');
   assert.deepStrictEqual(p.categories, [7]);
   assert.deepStrictEqual(p.tags, [50]);
-  assert.ok(p.content.startsWith(`<p><em>Por Romina ${SUF} · Marketing</em></p>`));
+  assert.ok(p.content.startsWith('<div class="publicador-autor"') && p.content.includes(`Romina ${SUF}</strong><br><span style="color:#777;font-size:0.95em">Marketing</span>`));
   assert.ok(!/script|data-imagen/.test(p.content));
   assert.match(p.content, /<img src="https:\/\/wp\.example\/uploads\/img-\d+\.png" alt="segunda" \/>/);
   // se subieron solo la usada (1) y la destacada (0); la 2 no se usó
@@ -280,8 +280,9 @@ test('autores: la línea sale escapada con cargo y enlace; el autor es obligator
   const a = await prisma.author.create({ data: { name: `<b>Ro</b> & "Co" ${SUF}`, role: 'Jefa <i>', linkUrl: 'https://linkedin.com/in/x' } });
   await c.post('/api/drafts', formulario({ authorId: a.id }));
   const linea = wpSim.posts[0].content.split('\n')[0];
-  assert.ok(linea.startsWith('<p><em>Por <a href="https://linkedin.com/in/x" target="_blank" rel="noopener noreferrer">&lt;b&gt;Ro&lt;/b&gt; &amp; &quot;Co&quot;'), linea);
-  assert.ok(linea.includes('· Jefa &lt;i&gt;</em></p>'), linea);
+  assert.ok(linea.startsWith('<div class="publicador-autor"') && !linea.includes('<img'), linea);
+  assert.ok(linea.includes('&lt;b&gt;Ro&lt;/b&gt; &amp; &quot;Co&quot;') && linea.includes('href="https://linkedin.com/in/x"'), linea);
+  assert.ok(linea.includes('Jefa &lt;i&gt; – <a'), linea);
   reiniciarWp();
   assert.strictEqual((await c.post('/api/drafts', formulario({ authorId: '' }))).status, 400);
   assert.strictEqual((await c.post('/api/drafts', formulario({ authorId: 'no-existe' }))).status, 400);
@@ -291,7 +292,7 @@ test('autores: la línea sale escapada con cargo y enlace; el autor es obligator
   // sin cargo ni enlace: solo el nombre; un enlace que no es http no se usa
   const b = await prisma.author.create({ data: { name: `Simple ${SUF}`, linkUrl: 'javascript:alert(1)' } });
   await c.post('/api/drafts', formulario({ authorId: b.id }));
-  assert.ok(wpSim.posts[0].content.startsWith(`<p><em>Por Simple ${SUF}</em></p>`));
+  assert.ok(wpSim.posts[0].content.includes(`>Simple ${SUF}</strong></div></div>`) && !wpSim.posts[0].content.includes('javascript:'));
 });
 
 test('autores: todos los usuarios ven los activos; solo el admin agrega, edita y desactiva', async () => {
@@ -327,7 +328,7 @@ test('autores con foto: se sube a WordPress, el bloque sale con la foto y al cam
   assert.strictEqual(wpSim.media.size, 1);
   await adm.post('/api/drafts', formulario({ authorId: r.json.author.id }));
   const c = wpSim.posts[0].content;
-  assert.ok(c.startsWith('<div style="display:flex'), c);
+  assert.ok(c.startsWith('<div class="publicador-autor"') && c.includes('width:96px'), c);
   assert.ok(c.includes(`src="${r.json.author.photoUrl}"`) && c.includes('[Linkedin]') && c.includes('>Ing.'), c);
   const f2 = new FormData(); f2.append('foto', new Blob([JPG]), 'b.jpg');
   assert.strictEqual((await adm.patch(`/api/authors/${r.json.author.id}`, f2)).status, 200);
