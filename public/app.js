@@ -185,6 +185,20 @@ function quitarImagen(i) {
 }
 
 // Arma lo que se envía: renumera las imágenes que quedan y saca las que no son de la lista.
+// Al escribir en el editor, el navegador deja el primer renglón como texto suelto (sin párrafo) y los
+// siguientes en <div>. Junta el texto y los elementos de línea sueltos del primer nivel en un <p>.
+const DE_LINEA = new Set(['B', 'STRONG', 'I', 'EM', 'U', 'S', 'A', 'SPAN', 'BR', 'IMG', 'SUB', 'SUP', 'CODE']);
+function envolverSueltos(raiz) {
+  let p = null;
+  for (const n of [...raiz.childNodes]) {
+    const suelto = n.nodeType === 3 ? n.textContent.trim() !== '' || p : n.nodeType === 1 && DE_LINEA.has(n.tagName);
+    if (!suelto) { p = null; continue; }
+    if (n.nodeType === 1 && n.tagName === 'BR' && !p) { n.remove(); continue; }
+    if (!p) { p = document.createElement('p'); raiz.insertBefore(p, n); }
+    p.appendChild(n);
+  }
+}
+
 function construir() {
   const activas = imgs.map((im, i) => ({ im, i })).filter((x) => !x.im.quitada);
   const mapa = new Map(activas.map((x, k) => [x.i, k]));
@@ -198,6 +212,7 @@ function construir() {
     img.removeAttribute('src');
     img.removeAttribute('style');
   });
+  envolverSueltos(clon);
   const marcada = document.querySelector('input[name="destacada"]:checked');
   const k = marcada && marcada.value !== '' ? mapa.get(Number(marcada.value)) : undefined;
   return { html: clon.innerHTML, files: activas.map((x) => x.im.file), urls: activas.map((x) => x.im.url), featured: k === undefined ? '' : k };

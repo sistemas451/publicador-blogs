@@ -181,7 +181,7 @@ test('camino feliz: sube imágenes, arma el texto y crea UN borrador (draft) con
   assert.strictEqual(p.status, 'draft', 'siempre borrador, aunque el cliente mande status=publish');
   assert.deepStrictEqual(p.categories, [7]);
   assert.deepStrictEqual(p.tags, [50]);
-  assert.ok(p.content.startsWith('<div class="publicador-autor"') && p.content.includes(`Romina ${SUF}</strong><br><span style="color:#777;font-size:0.95em">Marketing</span>`));
+  assert.ok(p.content.startsWith('<div class="publicador-autor"') && p.content.includes(`Romina ${SUF}</strong><span style="display:block;font-size:16px;line-height:24px;font-weight:400;color:#7a7a7a">Marketing</span>`));
   assert.ok(!/script|data-imagen/.test(p.content));
   assert.match(p.content, /<img src="https:\/\/wp\.example\/uploads\/img-\d+\.png" alt="segunda" \/>/);
   // se subieron solo la usada (1) y la destacada (0); la 2 no se usó
