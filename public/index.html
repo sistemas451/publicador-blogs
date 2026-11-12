@@ -45,6 +45,12 @@
       <h2>Nuevo blog</h2>
       <p>Esto crea un <b>borrador</b> en la web. No se publica: lo revisa y lo publica Facundo.</p>
       <form id="f-blog">
+        <fieldset style="max-width:800px">
+          <legend>Traer desde LinkedIn</legend>
+          <p><label>Link del posteo (público)<br><input type="url" id="li-url" size="60" placeholder="https://lnkd.in/... o https://www.linkedin.com/posts/..."></label>
+            <button type="button" id="b-traer">Traer y completar</button></p>
+          <p><small>Completa título, texto, autor e imágenes. Revisá todo antes de crear el borrador.</small></p>
+        </fieldset>
         <p><label>Título<br><input type="text" name="title" required maxlength="200" size="70"></label></p>
         <p><label>Categoría<br><select name="categoryId" required></select></label></p>
         <p><label>Autor (aparece como "Por ..." al principio)<br><select name="authorId" required></select></label></p>
@@ -60,6 +66,7 @@
           <button type="button" data-cmd="insertOrderedList">Lista numerada</button>
           <button type="button" id="b-enlace">Enlace</button>
         </p>
+        <p><small>Podés pegar imágenes (Ctrl+V) o arrastrarlas al texto: se agregan solas a la lista de abajo.</small></p>
         <div id="editor" contenteditable="true" style="border:1px solid #888; min-height:300px; padding:8px; max-width:800px"></div>
 
         <h3>Imágenes</h3>

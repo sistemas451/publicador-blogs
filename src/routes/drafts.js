@@ -6,6 +6,7 @@ const A = require('../services/auth');
 const wp = require('../services/wordpress');
 const { publicar } = require('../services/publicar');
 const { Invalido, limpiar } = require('../services/contenido');
+const linkedin = require('../services/linkedin');
 
 const router = express.Router(); // se monta en /api
 
@@ -56,6 +57,22 @@ router.post('/preview', A.sesion, (req, res) => {
   const { html } = req.body || {};
   if (typeof html !== 'string' || html.length > 2 * 1024 * 1024) return res.status(400).json({ error: 'No hay texto para mostrar.' });
   res.json({ html: limpiar(html) });
+});
+
+// Traer desde LinkedIn: lee los datos públicos del posteo (ver services/linkedin.js). Como mucho un pedido cada
+// 5 segundos por usuario, para no mandarle a LinkedIn pedidos de más.
+const ultimoLinkedin = new Map();
+router.post('/linkedin', A.sesion, async (req, res) => {
+  const ahora = Date.now();
+  if (ahora - (ultimoLinkedin.get(req.user.id) || 0) < 5000) return res.status(429).json({ error: 'Esperá unos segundos antes de traer otro posteo.' });
+  ultimoLinkedin.set(req.user.id, ahora);
+  try {
+    res.json(await linkedin.traer((req.body || {}).url));
+  } catch (e) {
+    if (e instanceof linkedin.ErrorLinkedin) return res.status(e.status).json({ error: e.message });
+    console.error('LinkedIn:', e.message);
+    res.status(502).json({ error: 'No se pudo leer el posteo de LinkedIn. Cargalo a mano.' });
+  }
 });
 
 router.get('/drafts', A.sesion, async (req, res) => {

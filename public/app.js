@@ -69,7 +69,10 @@ let categoriasListas = false;
 let imgs = []; // { file, url, alt, quitada }
 let rango = null; // última selección dentro del editor
 let destacadaSel = ''; // imagen destacada elegida ('' = ninguna); se recuerda porque la lista se vuelve a pintar
-$('f-blog').addEventListener('change', (e) => { if (e.target.name === 'destacada') destacadaSel = e.target.value; });
+let sinDestacadaElegida = false; // la persona marcó "Sin imagen destacada": no se elige una sola
+$('f-blog').addEventListener('change', (e) => {
+  if (e.target.name === 'destacada') { destacadaSel = e.target.value; sinDestacadaElegida = e.target.value === ''; }
+});
 
 async function prepararFormulario() {
   const f = $('f-blog');
@@ -89,6 +92,12 @@ async function prepararFormulario() {
     sel.appendChild(o);
   }
   categoriasListas = true;
+  elegirCategoriaUnica();
+}
+// Si la web tiene una sola categoría, queda elegida.
+function elegirCategoriaUnica() {
+  const sel = $('f-blog').elements.categoryId;
+  if (!sel.value && sel.options.length === 2) sel.selectedIndex = 1;
 }
 
 // Selección del editor (los botones le sacan el foco, así que se guarda y se restaura).
@@ -117,15 +126,34 @@ $('b-enlace').onclick = () => {
   else if (url) aviso('El enlace tiene que empezar con https://', true);
 };
 
-// Al pegar se conserva el formato, pero se sacan las imágenes pegadas (se suben con el botón de Imágenes).
-editor.addEventListener('paste', () => setTimeout(() => {
-  editor.querySelectorAll('script, style, iframe, object, embed').forEach((n) => n.remove());
-  const sueltas = editor.querySelectorAll('img:not([data-imagen])');
-  if (sueltas.length) {
-    sueltas.forEach((n) => n.remove());
-    aviso('Las imágenes pegadas desde otro documento no se pueden usar: subilas con el botón de la sección Imágenes.', true);
+// Pegar: una imagen copiada (captura, foto copiada del navegador o de WhatsApp) se agrega a la lista y queda donde
+// estaba el cursor. Si se pega texto con formato, se conserva; de las imágenes que vengan adentro solo se pueden
+// usar las que traen sus datos (data:); las que apuntan a otra página se sacan con un aviso.
+editor.addEventListener('paste', async (e) => {
+  const files = [...(e.clipboardData ? e.clipboardData.files : [])].filter((f) => f.type.startsWith('image/'));
+  const html = e.clipboardData ? e.clipboardData.getData('text/html') : '';
+  if (files.length && !html) {
+    e.preventDefault();
+    aviso('');
+    for (const i of await agregarArchivos(files)) insertarImagen(i);
+    return;
   }
-}, 0));
+  setTimeout(async () => {
+    editor.querySelectorAll('script, style, iframe, object, embed').forEach((n) => n.remove());
+    let descartadas = 0;
+    for (const n of [...editor.querySelectorAll('img:not([data-imagen])')]) {
+      const src = n.getAttribute('src') || '';
+      if (src.startsWith('data:image/')) {
+        const blob = await (await fetch(src)).blob();
+        const [i] = await agregarArchivos([new File([blob], 'pegada.' + (blob.type.split('/')[1] || 'png'), { type: blob.type })]);
+        if (i !== undefined) { n.replaceWith(marcador(i)); continue; }
+      }
+      n.remove();
+      descartadas++;
+    }
+    if (descartadas) aviso('Algunas imágenes del texto pegado no se pudieron tomar: copialas de a una y pegalas, o subilas en la sección Imágenes.', true);
+  }, 0);
+});
 
 function pintarImagenes() {
   const ol = $('imagenes');
@@ -156,27 +184,77 @@ function pintarImagenes() {
   if (!imgs.some((im, i) => !im.quitada && destacadaSel === String(i))) destacadaSel = '';
   if (destacadaSel === '') document.querySelector('input[name="destacada"][value=""]').checked = true;
 }
-$('archivos').onchange = (e) => {
-  aviso('');
-  const tipos = ['image/jpeg', 'image/png', 'image/webp'];
-  for (const file of e.target.files) {
-    if (imgs.filter((x) => !x.quitada).length >= limites.maxImages) { aviso(`Se pueden subir hasta ${limites.maxImages} imágenes.`, true); break; }
-    if (!tipos.includes(file.type)) { aviso(`"${file.name}" no es un JPG, PNG o WebP.`, true); continue; }
-    if (file.size > limites.maxImageMb * 1024 * 1024) { aviso(`"${file.name}" pesa más de ${limites.maxImageMb} MB.`, true); continue; }
-    imgs.push({ file, url: URL.createObjectURL(file), alt: '', quitada: false });
+// Fotos muy pesadas o muy grandes (las del celular suelen pasar los 5 MB): se achican a 2560 px como máximo y se
+// guardan en JPG, en vez de rechazarlas.
+const TIPOS = ['image/jpeg', 'image/png', 'image/webp'];
+const LADO_MAX = 2560;
+async function prepararImagen(file) {
+  if (!TIPOS.includes(file.type)) return { error: `"${file.name || 'La imagen'}" no es un JPG, PNG o WebP.` };
+  let bm = null;
+  try { bm = await createImageBitmap(file); } catch { return { error: `"${file.name || 'La imagen'}" no se pudo leer.` }; }
+  const grande = Math.max(bm.width, bm.height) > LADO_MAX;
+  if (!grande && file.size <= limites.maxImageMb * 1024 * 1024) { bm.close(); return { file }; }
+  const k = Math.min(1, LADO_MAX / Math.max(bm.width, bm.height));
+  const c = document.createElement('canvas');
+  c.width = Math.round(bm.width * k); c.height = Math.round(bm.height * k);
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+  ctx.drawImage(bm, 0, 0, c.width, c.height);
+  bm.close();
+  for (const q of [0.85, 0.7, 0.55]) {
+    const blob = await new Promise((r) => c.toBlob(r, 'image/jpeg', q));
+    if (blob && blob.size <= limites.maxImageMb * 1024 * 1024) {
+      const nombre = (file.name || 'imagen').replace(/\.\w+$/, '') + '.jpg';
+      return { file: new File([blob], nombre, { type: 'image/jpeg' }), achicada: true };
+    }
   }
-  e.target.value = '';
+  return { error: `"${file.name || 'La imagen'}" pesa demasiado aun achicándola.` };
+}
+// Agrega archivos a la lista. Devuelve los índices agregados. La primera imagen queda como destacada si no hay otra.
+async function agregarArchivos(files) {
+  const nuevos = [];
+  for (const f of files) {
+    if (imgs.filter((x) => !x.quitada).length >= limites.maxImages) { aviso(`Se pueden subir hasta ${limites.maxImages} imágenes.`, true); break; }
+    const r = await prepararImagen(f);
+    if (r.error) { aviso(r.error, true); continue; }
+    if (r.achicada) aviso(`"${r.file.name}" era muy grande y se achicó.`);
+    imgs.push({ file: r.file, url: URL.createObjectURL(r.file), alt: '', quitada: false });
+    nuevos.push(imgs.length - 1);
+  }
+  if (nuevos.length && destacadaSel === '' && !sinDestacadaElegida) destacadaSel = String(nuevos[0]);
   pintarImagenes();
+  return nuevos;
+}
+$('archivos').onchange = async (e) => {
+  aviso('');
+  const files = [...e.target.files];
+  e.target.value = '';
+  await agregarArchivos(files);
 };
-function insertarImagen(i) {
-  restaurarRango();
+const marcador = (i) => {
   const img = document.createElement('img');
   img.setAttribute('data-imagen', String(i));
   img.src = imgs[i].url;
   img.alt = '';
   img.setAttribute('style', 'max-width:100%');
-  document.execCommand('insertHTML', false, img.outerHTML);
+  return img;
+};
+function insertarImagen(i) {
+  restaurarRango();
+  document.execCommand('insertHTML', false, marcador(i).outerHTML);
 }
+
+// Arrastrar imágenes al texto: se agregan a la lista y quedan donde se soltaron.
+editor.addEventListener('dragover', (e) => { if ([...e.dataTransfer.types].includes('Files')) e.preventDefault(); });
+editor.addEventListener('drop', async (e) => {
+  const files = [...e.dataTransfer.files].filter((f) => f.type.startsWith('image/'));
+  if (!files.length) return;
+  e.preventDefault();
+  const r = document.caretRangeFromPoint ? document.caretRangeFromPoint(e.clientX, e.clientY) : null;
+  if (r && editor.contains(r.startContainer)) rango = r;
+  aviso('');
+  for (const i of await agregarArchivos(files)) insertarImagen(i);
+});
 function quitarImagen(i) {
   imgs[i].quitada = true;
   editor.querySelectorAll(`img[data-imagen="${i}"]`).forEach((n) => n.remove());
@@ -260,9 +338,63 @@ function limpiarFormulario() {
   imgs.forEach((im) => URL.revokeObjectURL(im.url));
   imgs = [];
   destacadaSel = '';
+  sinDestacadaElegida = false;
   pintarImagenes();
+  elegirCategoriaUnica();
   $('vista').hidden = true;
 }
+
+// ---------- Traer desde LinkedIn ----------
+// Compara nombres sin acentos ni mayúsculas: un autor de la lista coincide si todas sus palabras están en el
+// nombre que da LinkedIn ("Nicolás García Naino" ↔ "Nicolas Javier Garcia Naino").
+const palabras = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(Boolean);
+function autorQueCoincide(nombre) {
+  if (!nombre) return null;
+  const de = new Set(palabras(nombre));
+  const sel = $('f-blog').elements.authorId;
+  const cand = [...sel.options].filter((o) => o.value && palabras(o.textContent).every((p) => de.has(p)));
+  return cand.length === 1 ? cand[0].value : null;
+}
+$('b-traer').onclick = async () => {
+  aviso('');
+  const url = $('li-url').value.trim();
+  if (!url) { aviso('Pegá el link del posteo de LinkedIn.', true); return; }
+  const hayAlgo = editor.textContent.trim() || imgs.some((x) => !x.quitada) || $('f-blog').elements.title.value.trim();
+  if (hayAlgo && !confirm('Esto reemplaza el título, el texto y las imágenes que ya cargaste. ¿Seguir?')) return;
+  const b = $('b-traer');
+  b.disabled = true; b.textContent = 'Trayendo...';
+  try {
+    const r = await api('POST', '/linkedin', { url });
+    // Se empieza de cero (sin tocar la categoría).
+    const f = $('f-blog');
+    imgs.forEach((im) => URL.revokeObjectURL(im.url));
+    imgs = []; destacadaSel = ''; sinDestacadaElegida = false;
+    f.elements.title.value = r.titulo || '';
+    editor.innerHTML = r.html;
+    const autor = autorQueCoincide(r.autor);
+    if (autor) f.elements.authorId.value = autor;
+    const files = r.imagenes.map((im) => {
+      const bin = atob(im.datos); const arr = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      return new File([arr], im.nombre, { type: im.mime });
+    });
+    const idx = await agregarArchivos(files);
+    // Un documento (carrusel) va completo al final del texto; una foto sola queda solo como destacada.
+    if (r.tipo === 'documento') {
+      const s = getSelection(); const rg = document.createRange();
+      rg.selectNodeContents(editor); rg.collapse(false); s.removeAllRanges(); s.addRange(rg); rango = rg.cloneRange();
+      idx.forEach((i) => { const p = document.createElement('p'); p.appendChild(marcador(i)); editor.appendChild(p); });
+    }
+    const notas = [`Listo: se trajo el texto${idx.length ? ` y ${idx.length === 1 ? '1 imagen' : idx.length + ' imágenes'}` : ''}.`];
+    if (!autor) notas.push(r.autor ? `El autor de LinkedIn (${r.autor}) no está en la lista: elegilo a mano.` : 'Elegí el autor.');
+    notas.push('Revisá el título (es la primera oración del posteo) y el texto antes de crear el borrador.');
+    aviso([...notas, ...r.advertencias].join(' '));
+  } catch (err) {
+    aviso(err.message, true);
+  } finally {
+    b.disabled = false; b.textContent = 'Traer y completar';
+  }
+};
 
 $('f-blog').addEventListener('submit', async (e) => {
   e.preventDefault();
